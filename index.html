@@ -570,6 +570,10 @@
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sYmJ2YWhqY2F2aGZ0eGFvenZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3MjczMjMsImV4cCI6MjA5NjMwMzMyM30.FHygL7qhjoYAblKYZ1D_z9HgABnSjRDjqo-J2GV2WrM'; // Project Settings > API > anon public key
   // ============================================================
 
+  // Google Maps key for the Live Map page (the "web" key, with this site's address
+  // added under Website restrictions). Leave empty to keep using OpenStreetMap.
+  const GOOGLE_MAPS_KEY = '';
+
   const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const loginScreen = document.getElementById('login-screen');
@@ -837,7 +841,7 @@
     document.getElementById('page-' + pageName).classList.add('active');
     if (pageName === 'map' && !map) {
       setTimeout(initMap, 50);
-    } else if (map) {
+    } else if (map && map.invalidateSize) {
       setTimeout(() => map.invalidateSize(), 50);
     }
   }
@@ -956,7 +960,59 @@
 
   // ---------- LIVE MAP PAGE ----------
 
-  function initMap() {
+  let useGoogle = false;
+  let gInfo = null;
+  let mapStarting = false;
+
+  function loadGoogleMaps() {
+    return new Promise((resolve, reject) => {
+      if (window.google && google.maps) { resolve(); return; }
+      window.__gmReady = () => resolve();
+      const sc = document.createElement('script');
+      sc.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(GOOGLE_MAPS_KEY) + '&callback=__gmReady';
+      sc.onerror = () => reject(new Error('Google Maps script did not load'));
+      document.head.appendChild(sc);
+    });
+  }
+
+  // Google calls this when the key is rejected: fall back to OpenStreetMap
+  window.gm_authFailure = () => {
+    console.error('Google Maps rejected the key (check Maps JavaScript API + website restrictions).');
+    if (!useGoogle) return;
+    useGoogle = false;
+    Object.keys(markers).forEach(k => delete markers[k]);
+    document.getElementById('live-map').innerHTML = '';
+    map = null;
+    initLeafletMap();
+  };
+
+  async function initMap() {
+    if (mapStarting || map) return;
+    mapStarting = true;
+    if (GOOGLE_MAPS_KEY) {
+      try {
+        await loadGoogleMaps();
+        const g = new google.maps.Map(document.getElementById('live-map'), {
+          center: { lat: 15.8497, lng: 74.4977 }, zoom: 10,
+          mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
+        });
+        gInfo = new google.maps.InfoWindow();
+        useGoogle = true;
+        map = {
+          g,
+          invalidateSize() { google.maps.event.trigger(g, 'resize'); },
+          setView(ll, z) { g.setCenter({ lat: ll[0], lng: ll[1] }); g.setZoom(z); },
+        };
+        renderMapMarkers();
+        return;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    initLeafletMap();
+  }
+
+  function initLeafletMap() {
     map = L.map('live-map', { zoomControl: true }).setView([15.8497, 74.4977], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
@@ -968,11 +1024,40 @@
 
   function busIcon(status, label) {
     const cls = status === 'breakdown' ? 'breakdown' : status === 'idle' ? 'idle' : 'active';
+    if (useGoogle) return { cls, label };
     return L.divIcon({
       className: '',
       html: `<div class="bus-marker-icon ${cls}">${label}</div>`,
       iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -15],
     });
+  }
+
+  function gIcon(icon) {
+    const fill = { active: '#34d399', breakdown: '#f2545b', idle: '#f5a623' }[icon.cls] || '#34d399';
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">' +
+      '<circle cx="20" cy="20" r="15" fill="' + fill + '" stroke="#0b1320" stroke-width="3"/>' +
+      '<text x="20" y="24" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle" fill="#0b1320">' +
+      escHtml(icon.label) + '</text></svg>';
+    return {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+      scaledSize: new google.maps.Size(40, 40),
+      anchor: new google.maps.Point(20, 20),
+    };
+  }
+
+  // one marker object with the same small API for Leaflet and Google
+  function makeMarker(lat, lng, icon) {
+    if (!useGoogle) return L.marker([lat, lng], { icon }).addTo(map);
+    const m = new google.maps.Marker({ position: { lat, lng }, map: map.g, icon: gIcon(icon) });
+    let html = '';
+    const open = () => { gInfo.setContent('<div style="color:#111;font-size:13px">' + html + '</div>'); gInfo.open({ map: map.g, anchor: m }); };
+    m.addListener('click', open);
+    return {
+      setLatLng(p) { m.setPosition({ lat: p[0], lng: p[1] }); },
+      setIcon(i) { m.setIcon(gIcon(i)); },
+      bindPopup(h) { html = h; },
+      openPopup: open,
+    };
   }
 
   function renderMapMarkers() {
@@ -984,7 +1069,7 @@
         markers[loc.bus_id].setLatLng([loc.latitude, loc.longitude]);
         markers[loc.bus_id].setIcon(icon);
       } else {
-        markers[loc.bus_id] = L.marker([loc.latitude, loc.longitude], { icon }).addTo(map);
+        markers[loc.bus_id] = makeMarker(loc.latitude, loc.longitude, icon);
       }
       markers[loc.bus_id].bindPopup(popupHtml(loc));
     });
