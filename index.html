@@ -361,6 +361,45 @@
   .panel-actions { display: flex; gap: 8px; margin-top: 10px; }
   .panel-actions button { flex: 1; padding: 9px 0; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--text-primary); cursor: pointer; font-size: 12px; }
   .panel-actions .resolve-btn { background: var(--green-dim); color: var(--green); border-color: var(--green); }
+
+  /* ---------- STUDENT PASSES ---------- */
+  .nav-item .count { margin-left: auto; background: var(--red); color: #fff; font-size: 11px; border-radius: 10px; padding: 1px 7px; font-family: var(--font-mono); }
+  .sp-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .sp-chip { background: transparent; border: 1px solid var(--line); color: var(--text-dim); border-radius: 16px; padding: 6px 14px; font-size: 12.5px; cursor: pointer; }
+  .sp-chip:hover { border-color: var(--amber); color: var(--amber); }
+  .sp-chip.on { background: var(--amber); border-color: var(--amber); color: #1a1204; font-weight: 600; }
+  #sp-search { margin-left: auto; background: var(--bg-panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; color: var(--text-primary); font-size: 13px; width: 240px; }
+  .sp-row { cursor: pointer; }
+  .sp-row:hover td { background: var(--bg-panel-raised); }
+  .badge.submitted { background: var(--amber-dim); color: var(--amber); }
+  .badge.approved { background: var(--green-dim); color: var(--green); }
+  .badge.rejected { background: var(--red-dim); color: var(--red); }
+  .badge.pass_issued { background: var(--green-dim); color: var(--green); }
+  .badge.paid { background: var(--green-dim); color: var(--green); }
+  .badge.verifying { background: var(--amber-dim); color: var(--amber); }
+  .badge.awaiting_payment, .badge.pay_at_depot { background: #2a2a2a; color: var(--text-dim); }
+  #sp-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1999; }
+  #sp-backdrop.open { display: block; }
+  #sp-drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 480px; max-width: 100vw; background: var(--bg-panel); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .2s; z-index: 2000; overflow-y: auto; padding: 22px 24px 40px; }
+  #sp-drawer.open { transform: none; }
+  #sp-drawer h2 { margin: 0 0 4px; font-size: 20px; }
+  #sp-drawer .close { float: right; background: none; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; }
+  .sp-grid { display: grid; grid-template-columns: 130px 1fr; gap: 7px 12px; font-size: 13px; }
+  .sp-grid .k { color: var(--text-dim); }
+  .sp-docs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .sp-docs .doc { background: var(--bg-deep); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 11px; color: var(--text-dim); text-align: center; }
+  .sp-docs img { width: 100%; max-height: 220px; object-fit: contain; border-radius: 6px; margin-top: 6px; cursor: zoom-in; }
+  .sp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .sp-actions input, .sp-actions textarea, .sp-amount { background: var(--bg-deep); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); padding: 8px 10px; font-size: 13px; font-family: var(--font-display); }
+  .sp-actions textarea { width: 100%; min-height: 56px; }
+  .btn.danger { border-color: var(--red); color: var(--red); }
+  .btn.good { background: var(--green-dim); border-color: var(--green); color: var(--green); }
+  @media print {
+    body { overflow: visible; height: auto; background: #fff; color: #000; }
+    #nav, #main, #sp-backdrop, #sp-drawer .noprint { display: none !important; }
+    #sp-drawer { position: static; transform: none; border: none; width: 100%; background: #fff; color: #000; }
+    #sp-drawer .sp-grid .k { color: #444; }
+  }
 </style>
 </head>
 <body>
@@ -389,6 +428,7 @@
     <div class="nav-item" data-page="fleet"><span class="dot"></span>Fleet</div>
     <div class="nav-item" data-page="drivers"><span class="dot"></span>Drivers</div>
     <div class="nav-item alert" data-page="maintenance"><span class="dot"></span>Maintenance</div>
+    <div class="nav-item" data-page="students"><span class="dot"></span>Student Passes<span class="count" id="sp-count" style="display:none">0</span></div>
     <div id="nav-footer">
       <button id="logout-btn">Sign out</button>
     </div>
@@ -473,6 +513,29 @@
       </table>
     </div>
 
+    <!-- STUDENT PASSES -->
+    <div class="page" id="page-students">
+      <div class="page-header">
+        <h1>Student Passes</h1>
+        <span class="sub" id="sp-sub">Requests from the TrackBus app</span>
+      </div>
+      <div class="sp-toolbar" id="sp-toolbar">
+        <button class="sp-chip on" data-f="new">New</button>
+        <button class="sp-chip" data-f="approved">Approved</button>
+        <button class="sp-chip" data-f="pass_issued">Issued</button>
+        <button class="sp-chip" data-f="rejected">Rejected</button>
+        <button class="sp-chip" data-f="all">All</button>
+        <input id="sp-search" type="search" placeholder="Search name, college, phone, pass no." />
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Applied</th><th>Student</th><th>College</th><th>Route</th><th>Pass</th><th>Payment</th><th>Status</th></tr>
+        </thead>
+        <tbody id="sp-table-body"></tbody>
+      </table>
+      <div id="sp-empty" class="empty-note" style="display:none;">No requests here.</div>
+    </div>
+
   </div>
 </div>
 
@@ -494,6 +557,10 @@
     </div>
   </div>
 </div>
+
+<!-- STUDENT PASS DETAIL -->
+<div id="sp-backdrop"></div>
+<div id="sp-drawer"></div>
 
 <script>
   // ============================================================
@@ -551,6 +618,211 @@
     loadAll();
   }
 
+
+  // ============================================================
+  // STUDENT PASSES
+  // ============================================================
+  let studentRequests = [];
+  let spFilter = 'new';
+  let spOpenId = null;
+
+  function escHtml(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, c => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function spDate(v) {
+    if (!v) return '-';
+    const d = new Date(v);
+    return isNaN(d) ? '-' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  const SP_STATUS = { submitted: 'New', approved: 'Approved', rejected: 'Rejected', pass_issued: 'Pass issued' };
+  const SP_PAY = { pay_at_depot: 'Cash at counter', awaiting_payment: 'Awaiting UPI', verifying: 'Verify UPI', paid: 'Paid' };
+
+  async function loadStudentRequests() {
+    const { data, error } = await sb.from('student_pass_requests').select('*').order('created_at', { ascending: false }).limit(500);
+    if (error) {
+      console.error('student_pass_requests load error:', error.message);
+      document.getElementById('sp-sub').textContent = 'Could not load (run sql/01_student_pass.sql in Supabase): ' + error.message;
+      return;
+    }
+    studentRequests = data || [];
+  }
+
+  function spMatchesFilter(r) {
+    if (spFilter === 'all') return true;
+    if (spFilter === 'new') return r.status === 'submitted';
+    return r.status === spFilter;
+  }
+
+  function renderStudentTable() {
+    const q = (document.getElementById('sp-search').value || '').trim().toLowerCase();
+    const rows = studentRequests.filter(spMatchesFilter).filter(r => {
+      if (!q) return true;
+      return [r.full_name, r.institution, r.phone, r.pass_number, r.college_id_no, r.from_stop, r.to_stop]
+        .some(x => (x || '').toLowerCase().includes(q));
+    });
+    const body = document.getElementById('sp-table-body');
+    body.innerHTML = rows.map(r => `
+      <tr class="sp-row" data-id="${escHtml(r.id)}">
+        <td>${spDate(r.created_at)}</td>
+        <td><strong>${escHtml(r.full_name)}</strong><div style="color:var(--text-dim);font-size:12px">${escHtml(r.phone)}</div></td>
+        <td>${escHtml(r.institution)}<div style="color:var(--text-dim);font-size:12px">${escHtml(r.course)} · ${escHtml(r.year_of_study)}</div></td>
+        <td>${escHtml(r.from_stop)} → ${escHtml(r.to_stop)}</td>
+        <td>${escHtml(r.duration)}<div style="color:var(--text-dim);font-size:12px">₹${escHtml(r.amount)}</div></td>
+        <td><span class="badge ${escHtml(r.payment_status)}">${escHtml(SP_PAY[r.payment_status] || r.payment_status)}</span></td>
+        <td><span class="badge ${escHtml(r.status)}">${escHtml(SP_STATUS[r.status] || r.status)}</span></td>
+      </tr>`).join('');
+    document.getElementById('sp-empty').style.display = rows.length ? 'none' : 'block';
+    body.querySelectorAll('.sp-row').forEach(tr => tr.addEventListener('click', () => openStudentDrawer(tr.dataset.id)));
+
+    const fresh = studentRequests.filter(r => r.status === 'submitted').length;
+    const c = document.getElementById('sp-count');
+    c.textContent = fresh;
+    c.style.display = fresh ? 'inline-block' : 'none';
+  }
+
+  function initStudentUi() {
+    document.querySelectorAll('#sp-toolbar .sp-chip').forEach(b => b.addEventListener('click', () => {
+      spFilter = b.dataset.f;
+      document.querySelectorAll('#sp-toolbar .sp-chip').forEach(x => x.classList.toggle('on', x === b));
+      renderStudentTable();
+    }));
+    document.getElementById('sp-search').addEventListener('input', renderStudentTable);
+    document.getElementById('sp-backdrop').addEventListener('click', closeStudentDrawer);
+    sb.channel('student_pass_live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'student_pass_requests' }, async () => {
+        await loadStudentRequests();
+        renderStudentTable();
+        if (spOpenId) renderStudentDrawer();
+      })
+      .subscribe();
+  }
+
+  function closeStudentDrawer() {
+    spOpenId = null;
+    document.getElementById('sp-drawer').classList.remove('open');
+    document.getElementById('sp-backdrop').classList.remove('open');
+  }
+
+  function openStudentDrawer(id) {
+    spOpenId = id;
+    document.getElementById('sp-drawer').classList.add('open');
+    document.getElementById('sp-backdrop').classList.add('open');
+    renderStudentDrawer();
+  }
+
+  async function signedDoc(path) {
+    if (!path) return null;
+    const { data, error } = await sb.storage.from('student-docs').createSignedUrl(path, 900);
+    return error ? null : data.signedUrl;
+  }
+
+  async function renderStudentDrawer() {
+    const r = studentRequests.find(x => x.id === spOpenId);
+    const el = document.getElementById('sp-drawer');
+    if (!r) { closeStudentDrawer(); return; }
+    const [photoUrl, idUrl] = await Promise.all([signedDoc(r.photo_path), signedDoc(r.id_card_path)]);
+    if (spOpenId !== r.id) return;
+
+    const kv = (k, v) => `<div class="k">${k}</div><div>${escHtml(v == null || v === '' ? '-' : v)}</div>`;
+    let actions = '';
+    if (r.status === 'submitted') {
+      actions = `
+        <div class="panel-label" style="margin-top:20px">Decision</div>
+        <div class="sp-actions">
+          <label style="font-size:12px;color:var(--text-dim)">Amount ₹</label>
+          <input class="sp-amount" id="sp-amount" type="number" min="0" value="${escHtml(r.amount || 0)}" style="width:100px" />
+          <button class="btn good" id="sp-approve">Approve details</button>
+        </div>
+        <div class="sp-actions">
+          <textarea id="sp-remarks" placeholder="Reason (required to reject, shown to the student)"></textarea>
+          <button class="btn danger" id="sp-reject">Reject</button>
+        </div>`;
+    } else if (r.status === 'approved') {
+      const paid = r.payment_status === 'paid';
+      actions = `
+        <div class="panel-label" style="margin-top:20px">Payment and pass</div>
+        ${r.payment_method === 'online' ? `<div class="sp-grid">${kv('UPI reference', r.payment_ref || 'not entered yet')}</div>` : ''}
+        <div class="sp-actions">
+          ${paid ? '' : `<button class="btn good" id="sp-paid">${r.payment_method === 'online' ? 'UPI payment verified' : 'Cash received'}</button>`}
+          <button class="btn primary" id="sp-issue" ${paid ? '' : 'data-also-pay="1"'}>${paid ? 'Issue pass' : 'Receive payment and issue pass'}</button>
+        </div>`;
+    } else if (r.status === 'pass_issued') {
+      actions = `<div class="sp-actions noprint"><button class="btn" id="sp-print">Print pass details</button></div>`;
+    } else if (r.status === 'rejected') {
+      actions = `<div class="empty-note">Rejected${r.remarks ? ': ' + escHtml(r.remarks) : ''}. The student can apply again from the app.</div>`;
+    }
+
+    el.innerHTML = `
+      <button class="close noprint" id="sp-close">×</button>
+      <h2>${escHtml(r.full_name)}</h2>
+      <div style="margin-bottom:14px"><span class="badge ${escHtml(r.status)}">${escHtml(SP_STATUS[r.status] || r.status)}</span>
+        <span class="badge ${escHtml(r.payment_status)}">${escHtml(SP_PAY[r.payment_status] || r.payment_status)}</span></div>
+
+      <div class="panel-label">Documents</div>
+      <div class="sp-docs">
+        <div class="doc">Photo${photoUrl ? `<img src="${escHtml(photoUrl)}" onclick="window.open(this.src)">` : '<div>not available</div>'}</div>
+        <div class="doc">College ID card${idUrl ? `<img src="${escHtml(idUrl)}" onclick="window.open(this.src)">` : '<div>not available</div>'}</div>
+      </div>
+
+      <div class="panel-label" style="margin-top:20px">Student</div>
+      <div class="sp-grid">
+        ${kv('Date of birth', spDate(r.dob))}${kv('Gender', r.gender)}${kv('Mobile', r.phone)}${kv('Email', r.email)}
+        ${kv('Address', r.address)}${kv('Guardian', r.guardian_name)}${kv('Guardian phone', r.guardian_phone)}
+      </div>
+
+      <div class="panel-label" style="margin-top:20px">College</div>
+      <div class="sp-grid">
+        ${kv('Institution', r.institution)}${kv('Course', r.course)}${kv('Year', r.year_of_study)}${kv('College ID / USN', r.college_id_no)}
+      </div>
+
+      <div class="panel-label" style="margin-top:20px">Pass</div>
+      <div class="sp-grid">
+        ${kv('Route', r.from_stop + ' → ' + r.to_stop)}${kv('Duration', r.duration)}${kv('Amount', '₹' + (r.amount || 0))}
+        ${kv('Payment method', r.payment_method === 'online' ? 'Online (UPI)' : 'Cash at depot')}
+        ${r.pass_number ? kv('Pass number', r.pass_number) + kv('Valid', spDate(r.valid_from) + ' to ' + spDate(r.valid_to)) : ''}
+        ${kv('Applied on', spDate(r.created_at))}
+      </div>
+      ${actions}`;
+
+    const $ = id => document.getElementById(id);
+    $('sp-close').onclick = closeStudentDrawer;
+    if ($('sp-approve')) $('sp-approve').onclick = () => spUpdate(r, { status: 'approved', amount: Number($('sp-amount').value) || 0, remarks: null });
+    if ($('sp-reject')) $('sp-reject').onclick = () => {
+      const why = $('sp-remarks').value.trim();
+      if (!why) { alert('Please type the reason. The student will see it.'); return; }
+      spUpdate(r, { status: 'rejected', remarks: why });
+    };
+    if ($('sp-paid')) $('sp-paid').onclick = () => spUpdate(r, { payment_status: 'paid' });
+    if ($('sp-issue')) $('sp-issue').onclick = () => {
+      const months = { monthly: 1, quarterly: 3, yearly: 12 }[r.duration] || 1;
+      const from = new Date();
+      const to = new Date(from);
+      to.setMonth(to.getMonth() + months);
+      to.setDate(to.getDate() - 1);
+      const iso = d => d.toISOString().slice(0, 10);
+      spUpdate(r, {
+        status: 'pass_issued',
+        payment_status: 'paid',
+        pass_number: 'NWK-' + from.getFullYear() + '-' + r.id.replace(/-/g, '').slice(0, 6).toUpperCase(),
+        valid_from: iso(from),
+        valid_to: iso(to),
+      });
+    };
+    if ($('sp-print')) $('sp-print').onclick = () => window.print();
+  }
+
+  async function spUpdate(r, patch) {
+    const { data: { session } } = await sb.auth.getSession();
+    const { error } = await sb.from('student_pass_requests')
+      .update({ ...patch, reviewed_at: new Date().toISOString(), reviewed_by: session?.user?.email || null })
+      .eq('id', r.id);
+    if (error) { alert('Could not save: ' + error.message); return; }
+    await loadStudentRequests();
+    renderStudentTable();
+    renderStudentDrawer();
+  }
+
   // ---------- NAV ----------
 
   function initNav() {
@@ -582,6 +854,9 @@
     renderMaintenanceTable();
     if (map) renderMapMarkers();
     subscribeRealtime();
+    await loadStudentRequests();
+    renderStudentTable();
+    if (!window.__spUi) { window.__spUi = true; initStudentUi(); }
   }
 
   async function loadBusNames() {
