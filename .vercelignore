@@ -1,0 +1,7 @@
+*.bak
+*.bak2
+*.bak3
+*.py
+*.sql
+landing
+_headers

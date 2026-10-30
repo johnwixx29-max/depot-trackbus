@@ -1,2079 +1,401 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="referrer" content="no-referrer" />
-<meta name="robots" content="noindex,nofollow" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>TrackBus — Depot Control</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TrackBus: live bus tracking for Karnataka depots</title>
+<meta name="description" content="TrackBus shows riders where their bus is right now, and gives bus depots one screen to run the fleet. Pilot route: Belagavi to Chikkodi.">
+<meta property="og:title" content="TrackBus: live bus tracking for Karnataka depots">
+<meta property="og:description" content="Know where your bus is. Live GPS for regional buses, and one screen for the depot.">
+<meta name="theme-color" content="#0E2238">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230E2238'/%3E%3Crect x='12' y='16' width='40' height='28' rx='6' fill='%23F5A524'/%3E%3Crect x='17' y='21' width='30' height='11' rx='2' fill='%230E2238'/%3E%3Ccircle cx='22' cy='48' r='4' fill='%23F5A524'/%3E%3Ccircle cx='42' cy='48' r='4' fill='%23F5A524'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;500;600;700&family=Doto:wght@700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg-deep: #0b1320;
-    --bg-panel: #101c2e;
-    --bg-panel-raised: #16283f;
-    --line: #223349;
-    --text-primary: #e7edf5;
-    --text-dim: #7f93ab;
-    --amber: #f5a623;
-    --amber-dim: #4a3413;
-    --green: #34d399;
-    --green-dim: #0f3d2e;
-    --red: #f2545b;
-    --red-dim: #421318;
-    --font-display: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    --font-mono: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    --navy: #0E2238;
+    --navy-2: #16314F;
+    --amber: #F5A524;
+    --amber-deep: #C77F06;
+    --paper: #EEF2F6;
+    --white: #FFFFFF;
+    --ink: #0E2238;
+    --muted: #4F6379;
+    --line: #D3DCE6;
+    --green: #2FBF71;
+    --red: #E5484D;
+    --display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+    --body: 'Hanken Grotesk', 'Segoe UI', system-ui, sans-serif;
+    --led: 'Doto', 'Courier New', monospace;
+    --wrap: 1160px;
   }
-
   * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--body); font-size: 17px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  :focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+  .wrap { width: min(var(--wrap), calc(100% - 40px)); margin: 0 auto; }
 
-  body {
-    margin: 0;
-    background: var(--bg-deep);
-    color: var(--text-primary);
-    font-family: var(--font-display);
-    height: 100vh;
-    overflow: hidden;
-  }
+  /* ---------- nav ---------- */
+  header.nav { position: absolute; inset: 0 0 auto 0; z-index: 10; }
+  .nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 80px; }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: #fff; font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: -0.01em; }
+  .brand svg { width: 34px; height: 34px; }
+  .nav ul { display: flex; gap: 30px; list-style: none; margin: 0; padding: 0; }
+  .nav ul a { color: rgba(255,255,255,.78); text-decoration: none; font-weight: 500; font-size: 15px; }
+  .nav ul a:hover { color: #fff; }
+  .nav-actions { display: flex; gap: 10px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; height: 46px; padding: 0 22px; border-radius: 999px; font-family: var(--body); font-weight: 700; font-size: 15px; text-decoration: none; border: 2px solid transparent; cursor: pointer; transition: transform .15s ease, background .15s ease; }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.amber { background: var(--amber); color: #2A1A00; }
+  .btn.amber:hover { background: #FFB63D; }
+  .btn.line { border-color: rgba(255,255,255,.4); color: #fff; }
+  .btn.line:hover { border-color: #fff; }
+  .btn.navy { background: var(--navy); color: #fff; }
+  .btn.navy:hover { background: var(--navy-2); }
+  .btn.small { height: 40px; padding: 0 18px; font-size: 14px; }
 
-  /* ---------- LOGIN ---------- */
-  #login-screen {
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 24px;
-  }
-  #login-screen .brand { text-align: center; }
-  #login-screen .brand .mark {
-    font-family: var(--font-mono);
-    font-size: 13px;
-    letter-spacing: 0.3em;
-    color: var(--amber);
-    text-transform: uppercase;
-  }
-  #login-screen .brand h1 { font-size: 28px; margin: 8px 0 0; font-weight: 600; }
-  #login-screen .brand p { color: var(--text-dim); margin: 4px 0 0; font-size: 14px; }
-  #login-form {
-    background: var(--bg-panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 28px;
-    width: 320px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  #login-form input {
-    background: var(--bg-deep);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 11px 12px;
-    color: var(--text-primary);
-    font-size: 14px;
-    font-family: var(--font-display);
-  }
-  #login-form input:focus { outline: 2px solid var(--amber); outline-offset: -1px; border-color: var(--amber); }
-  #login-form button {
-    background: var(--amber);
-    color: #1a1204;
-    border: none;
-    border-radius: 6px;
-    padding: 12px;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-    margin-top: 6px;
-  }
-  #login-form button:hover { filter: brightness(1.08); }
-  #login-form button:disabled { opacity: 0.6; cursor: default; }
-  #login-error { color: var(--red); font-size: 13px; min-height: 16px; }
+  /* ---------- hero ---------- */
+  .hero { background: radial-gradient(1100px 520px at 78% -10%, #1F4570 0%, transparent 60%), var(--navy); color: #fff; padding: 150px 0 0; position: relative; overflow: hidden; }
+  .hero h1 { font-family: var(--display); font-weight: 800; font-size: clamp(48px, 8.2vw, 112px); line-height: .96; letter-spacing: -0.035em; margin: 0; max-width: 11ch; }
+  .hero .lede { font-size: clamp(18px, 2vw, 21px); color: rgba(255,255,255,.8); max-width: 34em; margin: 26px 0 34px; }
+  .hero .cta { display: flex; flex-wrap: wrap; gap: 12px; }
 
-  /* ---------- APP SHELL ---------- */
-  #app {
-    display: none;
-    height: 100vh;
-    grid-template-columns: 220px 1fr;
-    grid-template-rows: 100vh;
-  }
-  #app.active { display: grid; }
+  .scene { margin-top: 64px; }
+  .board { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: #050D17; border: 1px solid #25405F; border-bottom: 0; border-radius: 18px 18px 0 0; padding: 18px 26px; }
+  .board .led { font-family: var(--led); font-weight: 700; color: var(--amber); font-size: clamp(20px, 3.2vw, 34px); letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 0 12px rgba(245,165,36,.45); }
+  .board .live { display: flex; align-items: center; gap: 8px; font-size: 14px; color: rgba(255,255,255,.7); white-space: nowrap; }
+  .board .live i { width: 9px; height: 9px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 0 rgba(47,191,113,.6); animation: pulse 2s infinite; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 9px rgba(47,191,113,0); } 100% { box-shadow: 0 0 0 0 rgba(47,191,113,0); } }
+  .routebox { background: #0A1A2C; border: 1px solid #25405F; border-top: 0; padding: 18px 0 8px; overflow-x: auto; }
+  .routebox svg { display: block; width: 100%; min-width: 680px; height: auto; }
+  .caption { color: rgba(255,255,255,.55); font-size: 13px; padding: 10px 2px 22px; }
+  .road { height: 6px; background: repeating-linear-gradient(90deg, var(--amber) 0 34px, transparent 34px 64px); opacity: .9; }
 
-  #nav {
-    background: var(--bg-panel);
-    border-right: 1px solid var(--line);
-    display: flex;
-    flex-direction: column;
-    padding: 18px 0;
-  }
-  #nav .mark {
-    font-family: var(--font-mono);
-    letter-spacing: 0.2em;
-    font-size: 11px;
-    color: var(--amber);
-    padding: 0 20px 20px;
-    border-bottom: 1px solid var(--line);
-    margin-bottom: 10px;
-  }
-  .nav-item {
-    padding: 12px 20px;
-    font-size: 14px;
-    color: var(--text-dim);
-    cursor: pointer;
-    border-left: 3px solid transparent;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .nav-item .dot {
-    width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim);
-  }
-  .nav-item:hover { color: var(--text-primary); }
-  .nav-item.active {
-    color: var(--text-primary);
-    background: var(--bg-panel-raised);
-    border-left-color: var(--amber);
-  }
-  .nav-item.active .dot { background: var(--amber); }
-  .nav-item.alert .dot { background: var(--red); }
+  /* ---------- sections ---------- */
+  section { padding: 110px 0; }
+  h2 { font-family: var(--display); font-weight: 800; font-size: clamp(34px, 5vw, 58px); line-height: 1.02; letter-spacing: -0.03em; margin: 0 0 20px; max-width: 16ch; }
+  p.big { font-size: 19px; color: var(--muted); max-width: 32em; margin: 0 0 28px; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; align-items: center; }
+  .split.flip > :first-child { order: 2; }
+  .points { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
+  .points li { padding-left: 22px; position: relative; max-width: 32em; }
+  .points li::before { content: ''; position: absolute; left: 0; top: .62em; width: 9px; height: 9px; border-radius: 50%; background: var(--amber); }
+  .points b { font-weight: 700; }
 
-  #nav-footer {
-    margin-top: auto;
-    padding: 0 20px;
-  }
-  #logout-btn {
-    width: 100%;
-    background: transparent;
-    border: 1px solid var(--line);
-    color: var(--text-dim);
-    padding: 9px 0;
-    border-radius: 6px;
-    font-size: 12px;
-    cursor: pointer;
-  }
-  #logout-btn:hover { color: var(--text-primary); border-color: var(--text-dim); }
+  /* mock: rider phone */
+  .phone { width: min(340px, 100%); margin: 0 auto; background: var(--navy); border-radius: 38px; padding: 14px; box-shadow: 0 30px 60px -24px rgba(14,34,56,.55); }
+  .phone .screen { background: #fff; border-radius: 26px; overflow: hidden; }
+  .phone .top { background: var(--navy); color: #fff; padding: 18px 18px 16px; }
+  .phone .top small { color: rgba(255,255,255,.65); font-size: 12px; }
+  .phone .top strong { display: block; font-family: var(--display); font-size: 19px; margin-top: 2px; }
+  .bus-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .bus-row:last-child { border-bottom: 0; }
+  .bus-row .no { font-weight: 700; font-size: 15px; }
+  .bus-row .rt { color: var(--muted); font-size: 13px; grid-column: 1; }
+  .bus-row .eta { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-family: var(--display); font-weight: 800; font-size: 22px; text-align: right; line-height: 1; }
+  .bus-row .eta span { display: block; font-family: var(--body); font-weight: 500; font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 6px; vertical-align: 1px; }
+  .tag.live { background: #DDF5E8; color: #14753F; }
+  .tag.est { background: #FDEFD3; color: #8A5A00; }
+  .mock-note { text-align: center; color: var(--muted); font-size: 13px; margin-top: 16px; }
 
-  #main {
-    overflow-y: auto;
-    position: relative;
-  }
+  /* mock: depot table */
+  .dash { background: var(--navy); color: #fff; border-radius: 18px; padding: 20px; box-shadow: 0 30px 60px -24px rgba(14,34,56,.55); }
+  .dash h4 { margin: 0 0 14px; font-family: var(--display); font-size: 17px; font-weight: 700; display: flex; justify-content: space-between; align-items: baseline; }
+  .dash h4 span { font-family: var(--body); font-weight: 500; font-size: 13px; color: rgba(255,255,255,.6); }
+  .dash table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .dash th { text-align: left; font-weight: 500; font-size: 12px; color: rgba(255,255,255,.55); padding: 0 8px 8px 0; }
+  .dash td { padding: 11px 8px 11px 0; border-top: 1px solid #25405F; }
+  .pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+  .pill.ok { background: rgba(47,191,113,.16); color: #5FE0A0; }
+  .pill.bad { background: rgba(229,72,77,.2); color: #FF8B8F; }
+  .pill.off { background: rgba(255,255,255,.1); color: rgba(255,255,255,.65); }
+  .alert { margin-top: 16px; background: rgba(229,72,77,.14); border: 1px solid rgba(229,72,77,.5); border-radius: 12px; padding: 12px 14px; font-size: 14px; }
+  .alert b { color: #FF8B8F; }
 
-  .page { display: none; padding: 28px 32px; }
-  .page.active { display: block; }
+  /* how it works: a real sequence */
+  .how { background: var(--white); }
+  .steps { list-style: none; margin: 48px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; counter-reset: s; }
+  .steps li { position: relative; padding: 0 28px 0 0; counter-increment: s; }
+  .steps li::before { content: counter(s); display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--navy); color: var(--amber); font-family: var(--display); font-weight: 800; font-size: 19px; position: relative; z-index: 1; }
+  .steps li::after { content: ''; position: absolute; top: 21px; left: 44px; right: 0; height: 2px; background: repeating-linear-gradient(90deg, var(--line) 0 10px, transparent 10px 18px); }
+  .steps li:last-child::after { display: none; }
+  .steps h3 { font-family: var(--display); font-size: 21px; margin: 18px 0 6px; letter-spacing: -0.01em; }
+  .steps p { margin: 0; color: var(--muted); font-size: 16px; }
 
-  .page-header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    margin-bottom: 22px;
-  }
-  .page-header h1 { font-size: 22px; margin: 0; font-weight: 600; }
-  .page-header .sub { color: var(--text-dim); font-size: 13px; font-family: var(--font-mono); }
+  /* pilot */
+  .pilot { background: var(--navy); color: #fff; }
+  .pilot h2 { max-width: 14ch; }
+  .pilot p.big { color: rgba(255,255,255,.78); }
+  form { background: #fff; color: var(--ink); border-radius: 22px; padding: 30px; display: grid; gap: 16px; }
+  form .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  label { display: grid; gap: 6px; font-weight: 600; font-size: 14px; }
+  input, textarea { font: inherit; font-weight: 400; color: var(--ink); background: var(--paper); border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px; width: 100%; }
+  input:focus, textarea:focus { outline: 3px solid var(--amber); outline-offset: 0; border-color: var(--amber-deep); }
+  textarea { min-height: 96px; resize: vertical; }
+  .hp { position: absolute; left: -9999px; }
+  .msg { min-height: 24px; font-size: 15px; }
+  .msg.ok { color: #14753F; font-weight: 600; }
+  .msg.err { color: #B42318; font-weight: 600; }
+  .who { list-style: none; padding: 0; margin: 28px 0 0; display: grid; gap: 12px; }
+  .who li { padding-left: 24px; position: relative; color: rgba(255,255,255,.86); }
+  .who li::before { content: ''; position: absolute; left: 0; top: .6em; width: 10px; height: 10px; border-radius: 50%; background: var(--amber); }
 
-  /* ---------- OVERVIEW ---------- */
-  .stat-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
-    margin-bottom: 28px;
-  }
-  .stat-card {
-    background: var(--bg-panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 18px 20px;
-  }
-  .stat-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
-  .stat-card .value { font-family: var(--font-mono); font-size: 30px; font-weight: 700; margin-top: 6px; }
-  .stat-card.green .value { color: var(--green); }
-  .stat-card.red .value { color: var(--red); }
-  .stat-card.amber .value { color: var(--amber); }
+  footer { background: #081624; color: rgba(255,255,255,.65); padding: 40px 0; font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 30px; justify-content: space-between; align-items: center; }
+  footer a { text-decoration: none; }
+  footer a:hover { color: #fff; }
 
-  .section-title {
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-dim);
-    margin: 26px 0 12px;
+  @media (max-width: 900px) {
+    .nav ul { display: none; }
+    .split, .split.flip { grid-template-columns: 1fr; gap: 44px; }
+    .split.flip > :first-child { order: 0; }
+    .steps { grid-template-columns: 1fr; gap: 30px; }
+    .steps li::after { display: none; }
+    section { padding: 76px 0; }
+    form .row { grid-template-columns: 1fr; }
+    .nav-actions .line { display: none; }
   }
-
-  .alert-row {
-    background: var(--red-dim);
-    border: 1px solid var(--red);
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-  }
-  .alert-row b { color: var(--red); }
-  .alert-row .go { font-size: 12px; color: var(--red); font-family: var(--font-mono); }
-
-  .empty-note { color: var(--text-dim); font-size: 13px; padding: 10px 0; }
-
-  /* ---------- TABLES ---------- */
-  table.data-table { width: 100%; border-collapse: collapse; }
-  table.data-table th {
-    text-align: left;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-dim);
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--line);
-  }
-  table.data-table td {
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--line);
-    font-size: 13px;
-  }
-  table.data-table tr:hover td { background: var(--bg-panel-raised); }
-  .badge {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    text-transform: uppercase;
-    padding: 3px 8px;
-    border-radius: 100px;
-  }
-  .badge.active { background: var(--green-dim); color: var(--green); }
-  .badge.breakdown { background: var(--red-dim); color: var(--red); }
-  .badge.idle { background: var(--amber-dim); color: var(--amber); }
-  .badge.stale { background: #2a2a2a; color: var(--text-dim); }
-  .badge.resolved { background: #2a2a2a; color: var(--text-dim); }
-  .badge.open { background: var(--amber-dim); color: var(--amber); }
-
-  .btn {
-    font-size: 12px;
-    padding: 7px 14px;
-    border-radius: 6px;
-    border: 1px solid var(--line);
-    background: transparent;
-    color: var(--text-primary);
-    cursor: pointer;
-  }
-  .btn:hover { border-color: var(--amber); color: var(--amber); }
-  .btn.primary { background: var(--amber); color: #1a1204; border: none; font-weight: 600; }
-  .btn.primary:hover { filter: brightness(1.08); color: #1a1204; }
-
-  /* ---------- FORM MODAL ---------- */
-  #modal-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.55);
-    align-items: center;
-    justify-content: center;
-    z-index: 2000;
-  }
-  #modal-overlay.active { display: flex; }
-  #modal-box {
-    background: var(--bg-panel);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 24px;
-    width: 380px;
-  }
-  #modal-box h3 { margin: 0 0 16px; font-size: 16px; }
-  #modal-box label { display: block; font-size: 12px; color: var(--text-dim); margin: 12px 0 5px; }
-  #modal-box input {
-    width: 100%;
-    background: var(--bg-deep);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 9px 10px;
-    color: var(--text-primary);
-    font-size: 13px;
-  }
-  #modal-actions { display: flex; gap: 10px; margin-top: 20px; }
-  #modal-actions button { flex: 1; }
-
-  /* ---------- MAP PAGE ---------- */
-  #map-page { padding: 0; }
-  #map-page.active { display: flex; height: 100vh; }
-  #map-sidebar {
-    width: 320px;
-    background: var(--bg-panel);
-    border-right: 1px solid var(--line);
-    overflow-y: auto;
-    padding: 16px;
-  }
-  #map-container { flex: 1; position: relative; }
-  #live-map { height: 100vh; }
-
-  .bus-card {
-    background: var(--bg-panel-raised);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 12px 14px;
-    margin-bottom: 8px;
-    cursor: pointer;
-  }
-  .bus-card:hover { border-color: var(--amber); }
-  .bus-card .row1 { display: flex; align-items: center; justify-content: space-between; }
-  .bus-card .bus-name { font-weight: 600; font-size: 14px; }
-  .bus-card .meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); margin-top: 6px; }
-  .bus-card .actions { margin-top: 10px; display: flex; gap: 8px; }
-  .bus-card .actions button { flex: 1; font-size: 11px; padding: 7px 0; }
-
-  .leaflet-popup-content-wrapper { background: var(--bg-panel-raised); color: var(--text-primary); border-radius: 8px; }
-  .leaflet-popup-tip { background: var(--bg-panel-raised); }
-  .leaflet-popup-content { font-family: var(--font-display); font-size: 13px; margin: 12px 14px; }
-
-  .bus-marker-icon {
-    display: flex; align-items: center; justify-content: center;
-    width: 30px; height: 30px; border-radius: 50%;
-    border: 2px solid var(--bg-deep);
-    font-family: var(--font-mono); font-size: 10px; font-weight: 700;
-    color: #0b1320;
-    box-shadow: 0 0 0 3px rgba(0,0,0,0.15);
-  }
-  .bus-marker-icon.active { background: var(--green); }
-  .bus-marker-icon.breakdown { background: var(--red); animation: pulse 1.4s infinite; }
-  .bus-marker-icon.idle { background: var(--amber); }
-  @keyframes pulse {
-    0% { box-shadow: 0 0 0 0 rgba(242,84,91,0.55); }
-    70% { box-shadow: 0 0 0 10px rgba(242,84,91,0); }
-    100% { box-shadow: 0 0 0 0 rgba(242,84,91,0); }
-  }
-
-  #breakdown-panel-host {
-    display: none;
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    width: 320px;
-    z-index: 1000;
-  }
-  .breakdown-panel { background: var(--bg-panel); border: 1px solid var(--red); border-radius: 10px; padding: 18px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
-  .breakdown-panel h3 { margin: 0 0 4px; font-size: 15px; color: var(--red); }
-  .breakdown-panel .meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); }
-  .panel-section { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
-  .panel-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin-bottom: 8px; }
-  .nearby-bus { background: var(--bg-panel-raised); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; font-size: 13px; }
-  .dispatch-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px; cursor: pointer; }
-  #maintenance-notes {
-    width: 100%; background: var(--bg-deep); border: 1px solid var(--line); border-radius: 6px;
-    color: var(--text-primary); padding: 8px 10px; font-family: var(--font-display); font-size: 13px;
-    resize: vertical; min-height: 60px;
-  }
-  .panel-actions { display: flex; gap: 8px; margin-top: 10px; }
-  .panel-actions button { flex: 1; padding: 9px 0; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--text-primary); cursor: pointer; font-size: 12px; }
-  .panel-actions .resolve-btn { background: var(--green-dim); color: var(--green); border-color: var(--green); }
-
-  /* ---------- STUDENT PASSES ---------- */
-  .nav-item .count { margin-left: auto; background: var(--red); color: #fff; font-size: 11px; border-radius: 10px; padding: 1px 7px; font-family: var(--font-mono); }
-  .sp-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
-  .sp-chip { background: transparent; border: 1px solid var(--line); color: var(--text-dim); border-radius: 16px; padding: 6px 14px; font-size: 12.5px; cursor: pointer; }
-  .sp-chip:hover { border-color: var(--amber); color: var(--amber); }
-  .sp-chip.on { background: var(--amber); border-color: var(--amber); color: #1a1204; font-weight: 600; }
-  #sp-search { margin-left: auto; background: var(--bg-panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 12px; color: var(--text-primary); font-size: 13px; width: 240px; }
-  .sp-row { cursor: pointer; }
-  .sp-row:hover td { background: var(--bg-panel-raised); }
-  .badge.submitted { background: var(--amber-dim); color: var(--amber); }
-  .badge.approved { background: var(--green-dim); color: var(--green); }
-  .badge.rejected { background: var(--red-dim); color: var(--red); }
-  .badge.pass_issued { background: var(--green-dim); color: var(--green); }
-  .badge.paid { background: var(--green-dim); color: var(--green); }
-  .badge.verifying { background: var(--amber-dim); color: var(--amber); }
-  .badge.awaiting_payment, .badge.pay_at_depot { background: #2a2a2a; color: var(--text-dim); }
-  #sp-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1999; }
-  #sp-backdrop.open { display: block; }
-  #sp-drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 480px; max-width: 100vw; background: var(--bg-panel); border-left: 1px solid var(--line); transform: translateX(100%); transition: transform .2s; z-index: 2000; overflow-y: auto; padding: 22px 24px 40px; }
-  #sp-drawer.open { transform: none; }
-  #sp-drawer h2 { margin: 0 0 4px; font-size: 20px; }
-  #sp-drawer .close { float: right; background: none; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; }
-  .sp-grid { display: grid; grid-template-columns: 130px 1fr; gap: 7px 12px; font-size: 13px; }
-  .sp-grid .k { color: var(--text-dim); }
-  .sp-docs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .sp-docs .doc { background: var(--bg-deep); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 11px; color: var(--text-dim); text-align: center; }
-  .sp-docs img { width: 100%; max-height: 220px; object-fit: contain; border-radius: 6px; margin-top: 6px; cursor: zoom-in; }
-  .sp-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-  .sp-actions input, .sp-actions textarea, .sp-amount { background: var(--bg-deep); border: 1px solid var(--line); border-radius: 6px; color: var(--text-primary); padding: 8px 10px; font-size: 13px; font-family: var(--font-display); }
-  .sp-actions textarea { width: 100%; min-height: 56px; }
-  .btn.danger { border-color: var(--red); color: var(--red); }
-  .btn.good { background: var(--green-dim); border-color: var(--green); color: var(--green); }
-  @media print {
-    body { overflow: visible; height: auto; background: #fff; color: #000; }
-    #nav, #main, #sp-backdrop, #sp-drawer .noprint { display: none !important; }
-    #sp-drawer { position: static; transform: none; border: none; width: 100%; background: #fff; color: #000; }
-    #sp-drawer .sp-grid .k { color: #444; }
-  }
-
-  /* ---------- GOOGLE-STYLE GATE ---------- */
-  #gate { width: min(420px, calc(100vw - 32px)); background: var(--bg-panel); border: 1px solid var(--line);
-    border-radius: 16px; padding: 36px 36px 28px; }
-  #gate .g-brand { text-align: center; margin-bottom: 18px; }
-  #gate .mark { font-family: var(--font-mono); font-size: 12px; letter-spacing: .3em; color: var(--amber); }
-  #gate h1 { font-size: 26px; font-weight: 500; margin: 6px 0 8px; text-align: center; }
-  #gate .sub { color: var(--text-dim); text-align: center; font-size: 14px; margin: 0 0 22px; line-height: 1.5; }
-  #gate .fine { color: var(--text-dim); font-size: 12px; text-align: center; margin: 18px 0 0; }
-  #gate form { display: flex; flex-direction: column; gap: 14px; }
-  #gate input { background: var(--bg-deep); border: 1px solid var(--line); border-radius: 8px; padding: 14px;
-    color: var(--text-primary); font-size: 15px; width: 100%; font-family: var(--font-display); }
-  #gate input:focus { outline: 2px solid var(--amber); outline-offset: -1px; border-color: var(--amber); }
-  #gate .g-btn { background: var(--amber); color: #1a1204; border: 0; border-radius: 8px; padding: 13px;
-    font-weight: 600; font-size: 14px; cursor: pointer; width: 100%; margin-bottom: 10px; }
-  #gate .g-btn.ghost { background: transparent; color: var(--amber); border: 1px solid var(--line); }
-  #gate .g-btn.inline { width: auto; padding: 11px 26px; margin: 0; }
-  #gate .g-btn:disabled { opacity: .6; cursor: default; }
-  #gate .g-row { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
-  #gate .g-link { background: none; border: 0; color: var(--amber); font-size: 13px; cursor: pointer; padding: 6px 0; }
-  #gate .g-err { color: var(--red); font-size: 13px; min-height: 16px; }
-  #gate .chip { margin: 0 auto 18px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 20px;
-    font-size: 13px; width: fit-content; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-  #gate .pw { position: relative; }
-  #gate .pw .eye { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none;
-    border: 0; color: var(--text-dim); font-size: 12px; cursor: pointer; }
-  #gate .qr { background: #fff; padding: 10px; border-radius: 10px; width: 180px; height: 180px; margin: 0 auto 10px; }
-  #gate .qr img { width: 100%; height: 100%; }
-  #gate .secret { text-align: center; font-size: 12px; color: var(--text-dim); margin-bottom: 14px; word-break: break-all; }
-  #gate #g-code, #gate #g-ecode { text-align: center; letter-spacing: .5em; font-size: 20px; }
-
-  /* ---------- FULL BUS FORM ---------- */
-  #modal-box { width: min(880px, 94vw); max-height: 92vh; overflow-y: auto; }
-  #modal-box select, #modal-box textarea {
-    width: 100%; background: var(--bg-deep); border: 1px solid var(--line); border-radius: 6px;
-    padding: 9px 10px; color: var(--text-primary); font-size: 13px; font-family: inherit; }
-  #modal-box textarea { resize: vertical; }
-  #modal-box input[type=checkbox] { width: auto; margin-right: 6px; }
-  #modal-box input:focus, #modal-box select:focus, #modal-box textarea:focus { outline: 2px solid var(--amber); outline-offset: -1px; }
-  .bf-h { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--amber);
-    margin: 22px 0 4px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
-  .bf-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
-  .bf-grid .full { grid-column: 1 / -1; }
-  .bf-grid .chk { display: flex; align-items: flex-end; padding-bottom: 8px; }
-  .bf-grid .chk label { margin: 0; font-size: 13px; color: var(--text-primary); }
-  #bf-days { display: flex; flex-wrap: wrap; gap: 4px 14px; padding-top: 6px; }
-  #bf-days label { margin: 0; font-size: 13px; color: var(--text-primary); }
-  #stops-head, .stop-row { display: grid; grid-template-columns: 28px 1.6fr 132px 96px 96px 92px; gap: 6px; align-items: center; }
-  #stops-head { font-size: 11px; color: var(--text-dim); margin: 6px 0 4px; }
-  .stop-row { margin-bottom: 6px; }
-  .stop-row .stop-num { color: var(--text-dim); font-size: 12px; text-align: center; }
-  .stop-row .stop-btns { display: flex; gap: 4px; }
-  .stop-row .stop-btns button { background: none; border: 1px solid var(--line); color: var(--text-dim);
-    border-radius: 5px; width: 26px; height: 30px; cursor: pointer; }
-  .stop-row .stop-btns button:hover { border-color: var(--amber); color: var(--amber); }
-  #stops-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-  #stops-count { font-size: 12px; color: var(--text-dim); }
-  #stops-bulk { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-  .hint { font-size: 12px; color: var(--text-dim); margin-top: 6px; }
-  .sub-line { display: block; font-size: 11px; color: var(--text-dim); margin-top: 2px; }
-  @media (max-width: 700px) { .bf-grid { grid-template-columns: 1fr; } #stops-head { display: none; }
-    .stop-row { grid-template-columns: 24px 1fr 1fr; } }
-
-  /* ---------- MULTI-DEPOT ---------- */
-  #depot-badge { padding: 0 20px 14px; font-size: 13px; }
-  #depot-badge b { display: block; color: var(--text-primary); font-size: 14px; }
-  #depot-badge span { color: var(--text-dim); font-size: 12px; }
-  #depot-badge select { margin-top: 8px; width: 100%; background: var(--bg-deep); color: var(--text-primary);
-    border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; font-size: 13px; }
-  .adm-form { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 28px; align-items: center; }
-  .adm-form input, .adm-form select { background: var(--bg-deep); border: 1px solid var(--line); border-radius: 6px;
-    padding: 9px 10px; color: var(--text-primary); font-size: 13px; min-width: 150px; }
-  .adm-note { font-size: 12px; color: var(--text-dim); margin: -16px 0 28px; max-width: 60em; }
+  @media (max-width: 600px) { .board { padding: 14px 16px; } .board .live { display: none; } .board .led { font-size: 19px; white-space: normal; letter-spacing: .03em; } .routebox svg { min-width: 560px; } .hero { padding-top: 120px; } }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .board .live i { animation: none; } .btn { transition: none; } }
 </style>
 </head>
 <body>
 
-<!-- LOGIN -->
-<div id="login-screen">
-  <div id="gate">
-    <div class="g-brand">
-      <div class="mark">TRACKBUS &middot; DEPOT</div>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="TrackBus home">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#F5A524"/><rect x="12" y="16" width="40" height="28" rx="6" fill="#0E2238"/><rect x="17" y="21" width="30" height="11" rx="2" fill="#F5A524"/><circle cx="22" cy="48" r="4" fill="#0E2238"/><circle cx="42" cy="48" r="4" fill="#0E2238"/></svg>
+      TrackBus
+    </a>
+    <nav aria-label="Main"><ul>
+      <li><a href="#riders">For riders</a></li>
+      <li><a href="#depots">For depots</a></li>
+      <li><a href="#how">How it works</a></li>
+      <li><a href="#pilot">Pilot</a></li>
+    </ul></nav>
+    <div class="nav-actions">
+      <a class="btn line small" href="/depot/">Depot login</a>
+      <a class="btn amber small" href="#pilot">Request pilot access</a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+<div class="hero">
+  <div class="wrap">
+    <h1>Know where your bus is.</h1>
+    <p class="lede">TrackBus shows riders where their bus is right now, and gives the depot one screen to run the whole fleet. Built for regional buses in Karnataka.</p>
+    <div class="cta">
+      <a class="btn amber" href="#pilot">Request pilot access</a>
+      <a class="btn line" href="/depot/">Depot login</a>
     </div>
 
-    <!-- 0 welcome -->
-    <section class="g-step" data-step="welcome">
-      <h1>Depot Control</h1>
-      <p class="sub">Live fleet monitoring, student passes and maintenance for NWKRTC depot staff.</p>
-      <button class="g-btn" data-go="email">Sign in</button>
-      <button class="g-btn ghost" data-go="request">Request access</button>
-      <button class="g-link" data-go="signup" style="display:block;margin:0 auto">Create account (staff added by an admin)</button>
-      <p class="fine">Authorised depot staff only. All sign-ins are logged.</p>
-    </section>
-
-    <!-- 1 email -->
-    <section class="g-step" data-step="email" hidden>
-      <h1>Sign in</h1>
-      <p class="sub">Use your depot email</p>
-      <form id="f-email" novalidate>
-        <input type="email" id="g-email" placeholder="Email" autocomplete="username" required />
-        <div class="g-err" id="e-email"></div>
-        <div class="g-row"><button type="button" class="g-link" data-go="welcome">Back</button>
-          <button class="g-btn inline" type="submit">Next</button></div>
-      </form>
-    </section>
-
-    <!-- 2 password -->
-    <section class="g-step" data-step="password" hidden>
-      <h1>Welcome</h1>
-      <div class="chip" id="g-chip"></div>
-      <form id="f-pass" novalidate>
-        <div class="pw"><input type="password" id="g-pass" placeholder="Password" autocomplete="current-password" required />
-          <button type="button" class="eye" id="g-eye">Show</button></div>
-        <div class="g-err" id="e-pass"></div>
-        <div class="g-row"><button type="button" class="g-link" id="g-forgot">Forgot password?</button>
-          <button class="g-btn inline" type="submit" id="g-pass-btn">Sign in</button></div>
-        <div class="g-row"><button type="button" class="g-link" data-go="email">Use another account</button></div>
-      </form>
-    </section>
-
-    <!-- 3a authenticator code -->
-    <section class="g-step" data-step="mfa" hidden>
-      <h1>2-step verification</h1>
-      <p class="sub">Open your authenticator app and enter the 6-digit code.</p>
-      <form id="f-mfa" novalidate>
-        <input type="text" id="g-code" inputmode="numeric" maxlength="6" placeholder="123456" autocomplete="one-time-code" />
-        <div class="g-err" id="e-mfa"></div>
-        <div class="g-row"><button type="button" class="g-link" data-go="logout">Cancel</button>
-          <button class="g-btn inline" type="submit">Verify</button></div>
-      </form>
-    </section>
-
-    <!-- 3b first-time authenticator setup -->
-    <section class="g-step" data-step="enroll" hidden>
-      <h1>Secure your account</h1>
-      <p class="sub">Scan this with Google Authenticator, Microsoft Authenticator or Authy, then enter the code it shows.</p>
-      <div id="g-qr" class="qr"></div>
-      <div class="secret">Can't scan? Key: <code id="g-secret"></code></div>
-      <form id="f-enroll" novalidate>
-        <input type="text" id="g-ecode" inputmode="numeric" maxlength="6" placeholder="123456" autocomplete="one-time-code" />
-        <div class="g-err" id="e-enroll"></div>
-        <div class="g-row"><button type="button" class="g-link" data-go="logout">Cancel</button>
-          <button class="g-btn inline" type="submit">Turn on</button></div>
-      </form>
-    </section>
-
-    <!-- request access -->
-    <section class="g-step" data-step="request" hidden>
-      <h1>Request access</h1>
-      <p class="sub">Tell us who you are. An admin will verify you and create your account.</p>
-      <form id="f-request" novalidate>
-        <input type="text" id="r-name" placeholder="Full name" maxlength="80" />
-        <input type="email" id="r-email" placeholder="Work email" maxlength="120" />
-        <input type="text" id="r-depot" placeholder="Depot / office" maxlength="80" />
-        <input type="tel" id="r-phone" placeholder="Phone" maxlength="20" />
-        <input type="text" id="r-hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px" />
-        <div class="g-err" id="e-request"></div>
-        <div class="g-row"><button type="button" class="g-link" data-go="welcome">Back</button>
-          <button class="g-btn inline" type="submit">Send request</button></div>
-      </form>
-    </section>
-
-    <!-- create staff account -->
-    <section class="g-step" data-step="signup" hidden>
-      <h1>Create account</h1>
-      <p class="sub">Use the email your admin added. You will not get access until they have.</p>
-      <form id="f-signup" novalidate>
-        <input type="email" id="su-email" placeholder="Email" autocomplete="username" />
-        <input type="password" id="su-pass" placeholder="Password, at least 12 characters" autocomplete="new-password" />
-        <input type="password" id="su-pass2" placeholder="Repeat password" autocomplete="new-password" />
-        <div class="g-err" id="e-signup"></div>
-        <div class="g-row"><button type="button" class="g-link" data-go="welcome">Back</button>
-          <button class="g-btn inline" type="submit">Create account</button></div>
-      </form>
-    </section>
-
-    <!-- message -->
-    <section class="g-step" data-step="notice" hidden>
-      <h1 id="n-title"></h1>
-      <p class="sub" id="n-body"></p>
-      <button class="g-btn" data-go="welcome">Done</button>
-    </section>
+    <div class="scene" aria-label="A sample bus trip from Belagavi to Chikkodi">
+      <div class="board">
+        <div class="led" id="led" aria-live="off">Belagavi CBT to Chikkodi</div>
+        <div class="live"><i></i>Sample trip</div>
+      </div>
+      <div class="routebox">
+        <svg id="route" viewBox="0 0 1000 150" role="img" aria-label="A bus moving along a route with four stops">
+          <line x1="60" y1="70" x2="940" y2="70" stroke="#25405F" stroke-width="10" stroke-linecap="round"/>
+          <line id="done" x1="60" y1="70" x2="60" y2="70" stroke="#F5A524" stroke-width="10" stroke-linecap="round"/>
+          <g id="stops"></g>
+          <g id="bus" transform="translate(60,70)">
+            <g transform="translate(-30,-40)">
+              <rect width="60" height="34" rx="8" fill="#F5A524"/>
+              <rect x="6" y="6" width="9" height="11" rx="2" fill="#0A1A2C"/>
+              <rect x="19" y="6" width="9" height="11" rx="2" fill="#0A1A2C"/>
+              <rect x="32" y="6" width="9" height="11" rx="2" fill="#0A1A2C"/>
+              <rect x="45" y="6" width="10" height="17" rx="2" fill="#0A1A2C"/>
+              <circle cx="15" cy="34" r="6" fill="#0A1A2C" stroke="#F5A524" stroke-width="3"/>
+              <circle cx="45" cy="34" r="6" fill="#0A1A2C" stroke="#F5A524" stroke-width="3"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div class="caption">Sample route for illustration. Stops and times are not a real timetable.</div>
+    </div>
   </div>
+  <div class="road" aria-hidden="true"></div>
 </div>
 
-<!-- APP -->
-<div id="app">
-  <div id="nav">
-    <div class="mark">TRACKBUS</div>
-    <div id="depot-badge"></div>
-    <div class="nav-item active" data-page="overview"><span class="dot"></span>Overview</div>
-    <div class="nav-item" data-page="map"><span class="dot"></span>Live Map</div>
-    <div class="nav-item" data-page="fleet"><span class="dot"></span>Fleet</div>
-    <div class="nav-item" data-page="drivers"><span class="dot"></span>Drivers</div>
-    <div class="nav-item alert" data-page="maintenance"><span class="dot"></span>Maintenance</div>
-    <div class="nav-item" data-page="students"><span class="dot"></span>Student Passes<span class="count" id="sp-count" style="display:none">0</span></div>
-    <div class="nav-item" data-page="admin" id="nav-admin" style="display:none"><span class="dot"></span>Depots and Staff</div>
-    <div id="nav-footer">
-      <button id="logout-btn">Sign out</button>
+<section id="riders">
+  <div class="wrap split">
+    <div>
+      <h2>Stop guessing the timetable.</h2>
+      <p class="big">Open the app, search where you are going, and see which bus is coming and how far away it is.</p>
+      <ul class="points">
+        <li><b>Live position on the map.</b> If a bus has a tracker you see it move. If not, you see an estimate from the timetable, marked clearly as an estimate.</li>
+        <li><b>The nearest stop, found for you.</b> The app uses your location to show the closest stops and the buses leaving them.</li>
+        <li><b>Student pass in the app.</b> Apply, upload your college ID, pay, and carry the pass on your phone.</li>
+        <li><b>Emergency number on every bus.</b> Crew contacts and a helpline are one tap away.</li>
+      </ul>
     </div>
-  </div>
-
-  <div id="main">
-
-    <!-- OVERVIEW -->
-    <div class="page active" id="page-overview">
-      <div class="page-header">
-        <h1>Overview</h1>
-        <span class="sub" id="overview-time"></span>
-      </div>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="label">Total Fleet</div><div class="value" id="stat-total">0</div></div>
-        <div class="stat-card green"><div class="label">Active</div><div class="value" id="stat-active">0</div></div>
-        <div class="stat-card red"><div class="label">Breakdown</div><div class="value" id="stat-breakdown">0</div></div>
-        <div class="stat-card amber"><div class="label">No Signal</div><div class="value" id="stat-stale">0</div></div>
-      </div>
-
-      <div class="section-title">Active Breakdown Alerts</div>
-      <div id="overview-alerts"></div>
-
-      <div class="section-title">Buses Currently Under Repair</div>
-      <div id="overview-repairs"></div>
-    </div>
-
-    <!-- LIVE MAP -->
-    <div class="page" id="page-map">
-      <div id="map-page">
-        <div id="map-sidebar">
-          <div class="section-title" style="margin-top:0">Fleet Status</div>
-          <div id="bus-list"></div>
-          <div id="empty-state" class="empty-note" style="display:none;">No buses reporting yet.<br/>Waiting for tracker data.</div>
-        </div>
-        <div id="map-container">
-          <div id="live-map"></div>
-          <div id="breakdown-panel-host"></div>
+    <div>
+      <div class="phone" role="img" aria-label="Sample rider app screen listing buses with arrival times">
+        <div class="screen">
+          <div class="top"><small>Buses from CBT</small><strong>Belagavi to Chikkodi</strong></div>
+          <div class="bus-row"><div class="no">KA 22 F 1234<span class="tag live">Live</span></div><div class="rt">Belagavi, Sankeshwar, Chikkodi</div><div class="eta">5<span>minutes</span></div></div>
+          <div class="bus-row"><div class="no">KA 22 F 1301<span class="tag live">Live</span></div><div class="rt">Belagavi, Nipani, Chikkodi</div><div class="eta">12<span>minutes</span></div></div>
+          <div class="bus-row"><div class="no">KA 22 F 1288<span class="tag est">Estimated</span></div><div class="rt">Belagavi, Hukkeri, Chikkodi</div><div class="eta">26<span>minutes</span></div></div>
         </div>
       </div>
-    </div>
-
-    <!-- FLEET -->
-    <div class="page" id="page-fleet">
-      <div class="page-header">
-        <h1>Fleet</h1>
-        <button class="btn primary" id="add-bus-btn">+ Add Bus</button>
-      </div>
-      <table class="data-table">
-        <thead>
-          <tr><th>Bus No</th><th>Route</th><th>Driver</th><th>Conductor</th><th>Seats</th><th>Documents</th><th>Status</th><th></th></tr>
-        </thead>
-        <tbody id="fleet-table-body"></tbody>
-      </table>
-    </div>
-
-    <!-- DRIVERS -->
-    <div class="page" id="page-drivers">
-      <div class="page-header">
-        <h1>Drivers</h1>
-        <span class="sub">Edit driver info from the Fleet page — each driver is linked to a bus</span>
-      </div>
-      <table class="data-table">
-        <thead>
-          <tr><th>Staff</th><th>Role</th><th>Phone</th><th>Licence / Emp ID</th><th>Bus</th><th>Route</th></tr>
-        </thead>
-        <tbody id="drivers-table-body"></tbody>
-      </table>
-    </div>
-
-    <!-- MAINTENANCE -->
-    <div class="page" id="page-maintenance">
-      <div class="page-header">
-        <h1>Maintenance</h1>
-        <span class="sub">Repair history across the fleet</span>
-      </div>
-      <table class="data-table">
-        <thead>
-          <tr><th>Bus</th><th>Issue / Notes</th><th>Mechanic</th><th>Reported</th><th>Status</th></tr>
-        </thead>
-        <tbody id="maintenance-table-body"></tbody>
-      </table>
-    </div>
-
-    <!-- STUDENT PASSES -->
-        <!-- DEPOTS AND STAFF (state admin) -->
-    <div class="page" id="page-admin">
-      <div class="page-header">
-        <h1>Depots and Staff</h1>
-        <span class="sub">Visible to state admins only</span>
-      </div>
-
-      <div class="section-title">Depots</div>
-      <table class="data-table">
-        <thead><tr><th>Name</th><th>Code</th><th>District</th><th>Helpline</th></tr></thead>
-        <tbody id="adm-depots"></tbody>
-      </table>
-      <div class="adm-form">
-        <input id="ad-name" placeholder="Depot name" maxlength="80">
-        <input id="ad-code" placeholder="Code (BGM)" maxlength="10" style="min-width:90px">
-        <input id="ad-district" placeholder="District" maxlength="60">
-        <input id="ad-helpline" placeholder="Helpline" maxlength="20">
-        <button class="btn primary" id="ad-add">Add depot</button>
-      </div>
-
-      <div class="section-title">Staff who can sign in</div>
-      <table class="data-table">
-        <thead><tr><th>Email</th><th>Name</th><th>Depot</th><th>Role</th><th></th></tr></thead>
-        <tbody id="adm-staff"></tbody>
-      </table>
-      <div class="adm-form">
-        <input id="as-email" type="email" placeholder="Staff email" maxlength="120">
-        <input id="as-name" placeholder="Full name" maxlength="80">
-        <select id="as-depot"></select>
-        <select id="as-role"><option value="depot_admin">Depot admin</option><option value="state_admin">State admin (all depots)</option></select>
-        <button class="btn primary" id="as-add">Add staff</button>
-      </div>
-      <div class="adm-note">After you add an email, that person opens the depot page, chooses Create account, and sets a password. On first sign-in they set up an authenticator app.</div>
-
-      <div class="section-title">Requests from the website</div>
-      <table class="data-table">
-        <thead><tr><th>Received</th><th>Name</th><th>Depot or organisation</th><th>Contact</th><th>Message</th><th>Status</th></tr></thead>
-        <tbody id="adm-requests"></tbody>
-      </table>
-    </div>
-
-<div class="page" id="page-students">
-      <div class="page-header">
-        <h1>Student Passes</h1>
-        <span class="sub" id="sp-sub">Requests from the TrackBus app</span>
-      </div>
-      <div class="sp-toolbar" id="sp-toolbar">
-        <button class="sp-chip on" data-f="new">New</button>
-        <button class="sp-chip" data-f="approved">Approved</button>
-        <button class="sp-chip" data-f="pass_issued">Issued</button>
-        <button class="sp-chip" data-f="rejected">Rejected</button>
-        <button class="sp-chip" data-f="all">All</button>
-        <input id="sp-search" type="search" placeholder="Search name, college, phone, pass no." />
-      </div>
-      <table class="data-table">
-        <thead>
-          <tr><th>Applied</th><th>Student</th><th>College</th><th>Route</th><th>Pass</th><th>Payment</th><th>Status</th></tr>
-        </thead>
-        <tbody id="sp-table-body"></tbody>
-      </table>
-      <div id="sp-empty" class="empty-note" style="display:none;">No requests here.</div>
-    </div>
-
-  </div>
-</div>
-
-<!-- ADD/EDIT BUS MODAL -->
-<div id="modal-overlay">
-  <div id="modal-box">
-    <h3 id="modal-title">Add Bus</h3>
-
-    <div class="bf-h">Bus</div>
-    <div class="bf-grid">
-      <div class="full"><label for="bf-depot_id">Depot</label><select id="bf-depot_id"></select></div>
-<div><label for="bf-bus_no">Bus number (registration) *</label><input type="text" id="bf-bus_no" placeholder="KA22F1001" /></div>
-      <div><label for="bf-fleet_no">Depot / fleet code</label><input type="text" id="bf-fleet_no" placeholder="e.g. BGM-114" /></div>
-      <div><label for="bf-service_type">Service type</label><select id="bf-service_type"><option value="">Select</option><option>Ordinary (Karnataka Sarige)</option><option>Express</option><option>Rajahamsa</option><option>Non-stop</option><option>AC</option><option>Sleeper</option><option>Electric</option><option>Mini bus</option><option>Other</option></select></div>
-      <div><label for="bf-fuel_type">Fuel</label><select id="bf-fuel_type"><option value="">Select</option><option>Diesel</option><option>CNG</option><option>Electric</option><option>Other</option></select></div>
-      <div><label for="bf-make">Make</label><input type="text" id="bf-make" placeholder="Ashok Leyland, Tata, Eicher..." /></div>
-      <div><label for="bf-model">Model</label><input type="text" id="bf-model" placeholder="" /></div>
-      <div><label for="bf-mfg_year">Year of manufacture</label><input type="number" id="bf-mfg_year" placeholder="2022" step="any" /></div>
-      <div><label for="bf-seats">Seats</label><input type="number" id="bf-seats" placeholder="45" step="any" /></div>
-      <div><label for="bf-standing_capacity">Standing capacity</label><input type="number" id="bf-standing_capacity" placeholder="" step="any" /></div>
-      <div><label for="bf-ladies_seats">Seats reserved for women</label><input type="number" id="bf-ladies_seats" placeholder="" step="any" /></div>
-      <div class="chk"><label><input type="checkbox" id="bf-is_ac" /> Air-conditioned</label></div>
-      <div class="chk"><label><input type="checkbox" id="bf-wheelchair_accessible" /> Wheelchair accessible</label></div>
-      <div class="chk"><label><input type="checkbox" id="bf-is_active" /> In service (shown to riders)</label></div>
-    </div>
-
-    <div class="bf-h">Crew</div>
-    <div class="bf-grid">
-      <div><label for="bf-driver_name">Driver name</label><input type="text" id="bf-driver_name" placeholder="" /></div>
-      <div><label for="bf-driver_phone">Driver phone</label><input type="tel" id="bf-driver_phone" placeholder="+91..." /></div>
-      <div><label for="bf-driver_licence_no">Driver licence number</label><input type="text" id="bf-driver_licence_no" placeholder="" /></div>
-      <div><label for="bf-driver_emp_id">Driver employee ID</label><input type="text" id="bf-driver_emp_id" placeholder="" /></div>
-      <div><label for="bf-conductor_name">Conductor name</label><input type="text" id="bf-conductor_name" placeholder="" /></div>
-      <div><label for="bf-conductor_phone">Conductor phone</label><input type="tel" id="bf-conductor_phone" placeholder="+91..." /></div>
-      <div><label for="bf-conductor_emp_id">Conductor employee ID</label><input type="text" id="bf-conductor_emp_id" placeholder="" /></div>
-    </div>
-
-    <div class="bf-h">Emergency and control</div>
-    <div class="bf-grid">
-      <div><label for="bf-emergency_phone">Emergency number (shown to riders)</label><input type="tel" id="bf-emergency_phone" placeholder="Helpline / control room" /></div>
-      <div><label for="bf-depot_control_phone">Depot control room number</label><input type="tel" id="bf-depot_control_phone" placeholder="" /></div>
-    </div>
-
-    <div class="bf-h">Route and timetable</div>
-    <div class="bf-grid">
-      <div class="full"><label for="bf-route">Route name (leave blank to use first stop to last stop)</label><input type="text" id="bf-route" placeholder="Belagavi to Chikkodi via Nipani" /></div>
-      <div><label for="bf-fare_full">Full-route fare (Rs)</label><input type="number" id="bf-fare_full" placeholder="85" step="any" /></div>
-      <div>
-        <label>Runs on</label>
-        <div id="bf-days">
-          <label><input type="checkbox" class="od" value="Mon" /> Mon</label>
-          <label><input type="checkbox" class="od" value="Tue" /> Tue</label>
-          <label><input type="checkbox" class="od" value="Wed" /> Wed</label>
-          <label><input type="checkbox" class="od" value="Thu" /> Thu</label>
-          <label><input type="checkbox" class="od" value="Fri" /> Fri</label>
-          <label><input type="checkbox" class="od" value="Sat" /> Sat</label>
-          <label><input type="checkbox" class="od" value="Sun" /> Sun</label>
-        </div>
-      </div>
-    </div>
-
-    <label>Stops the bus goes through, in order, with arrival time</label>
-    <div id="stops-head"><span>#</span><span>Stop name</span><span>Time</span><span>Latitude</span><span>Longitude</span><span></span></div>
-    <div id="stops-list"></div>
-    <datalist id="known-stops"></datalist>
-    <div id="stops-actions">
-      <button type="button" class="btn" id="stop-add">+ Add stop</button>
-      <button type="button" class="btn" id="stop-bulk-toggle">Paste a list</button>
-      <span id="stops-count"></span>
-    </div>
-    <div id="stops-bulk" style="display:none">
-      <textarea id="stops-bulk-text" rows="6" placeholder="One stop per line:&#10;Belagavi CBT, 07:00 AM&#10;Tilakwadi, 07:12 AM&#10;Nipani, 08:30 AM, 16.4, 74.38"></textarea>
-      <button type="button" class="btn" id="stops-bulk-add">Add these stops</button>
-      <div class="hint">Format: name, time, and optionally latitude, longitude.</div>
-    </div>
-    <div class="hint">Latitude and longitude are filled in automatically for stops the system already knows. For a new stop, enter them so the app can place it on the map.</div>
-
-    <div class="bf-h">Documents and service</div>
-    <div class="bf-grid">
-      <div><label for="bf-permit_no">Route permit number</label><input type="text" id="bf-permit_no" placeholder="" /></div>
-      <div><label for="bf-permit_expiry">Permit valid until</label><input type="date" id="bf-permit_expiry" placeholder="" /></div>
-      <div><label for="bf-insurance_expiry">Insurance valid until</label><input type="date" id="bf-insurance_expiry" placeholder="" /></div>
-      <div><label for="bf-fitness_expiry">Fitness certificate valid until</label><input type="date" id="bf-fitness_expiry" placeholder="" /></div>
-      <div><label for="bf-puc_expiry">Pollution (PUC) valid until</label><input type="date" id="bf-puc_expiry" placeholder="" /></div>
-      <div><label for="bf-last_service_date">Last service date</label><input type="date" id="bf-last_service_date" placeholder="" /></div>
-      <div><label for="bf-next_service_due">Next service due</label><input type="date" id="bf-next_service_due" placeholder="" /></div>
-      <div><label for="bf-odometer_km">Odometer (km)</label><input type="number" id="bf-odometer_km" placeholder="" step="any" /></div>
-    </div>
-
-    <div class="bf-h">Notes</div>
-    <textarea id="bf-notes" rows="3" placeholder="Anything else about this bus"></textarea>
-
-    <div id="modal-actions">
-      <button class="btn danger" id="bf-delete-btn" style="display:none">Delete bus</button>
-      <span style="flex:1"></span>
-      <button class="btn" id="modal-cancel-btn">Cancel</button>
-      <button class="btn primary" id="modal-save-btn">Save</button>
+      <p class="mock-note">Sample screen</p>
     </div>
   </div>
-</div>
+</section>
 
-<!-- STUDENT PASS DETAIL -->
-<div id="sp-backdrop"></div>
-<div id="sp-drawer"></div>
+<section id="depots" style="background:#E3EAF1">
+  <div class="wrap split flip">
+    <div>
+      <h2>Run the depot from one screen.</h2>
+      <p class="big">Every bus, driver and conductor, every document due date, and every student pass request, in one place that updates as it happens.</p>
+      <ul class="points">
+        <li><b>Live fleet map.</b> See every bus with a tracker, and which ones have gone quiet.</li>
+        <li><b>Breakdowns handled faster.</b> Mark a bus as broken down and see the nearest buses on the same route, with their drivers' numbers.</li>
+        <li><b>Full bus records.</b> Crew, route stops with times, permit, insurance, fitness and pollution dates, and service history.</li>
+        <li><b>Student passes without paper.</b> Review the request, check the payment, issue the pass.</li>
+        <li><b>Staff only, and locked down.</b> Every sign-in needs a code from an authenticator app.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="dash" role="img" aria-label="Sample depot dashboard with a fleet table and a breakdown alert">
+        <h4>Fleet today <span>Sample data</span></h4>
+        <table>
+          <thead><tr><th>Bus</th><th>Route</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>KA 22 F 1234</td><td>Belagavi to Chikkodi</td><td><span class="pill ok">Running</span></td></tr>
+            <tr><td>KA 22 F 1301</td><td>Belagavi to Nipani</td><td><span class="pill ok">Running</span></td></tr>
+            <tr><td>KA 22 F 1288</td><td>Belagavi to Hukkeri</td><td><span class="pill bad">Breakdown</span></td></tr>
+            <tr><td>KA 22 F 1410</td><td>Belagavi to Gokak</td><td><span class="pill off">No signal</span></td></tr>
+          </tbody>
+        </table>
+        <div class="alert"><b>KA 22 F 1288 broke down.</b> Nearest bus on the same route: KA 22 F 1301, 4 km away.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how" class="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="big">A small GPS tracker on each bus, and a server that only trusts devices it knows.</p>
+    <ol class="steps">
+      <li><h3>Tracker on the bus</h3><p>A GPS device sends the bus's position every few seconds over the mobile network.</p></li>
+      <li><h3>Server checks it</h3><p>The server confirms the device is registered and the position makes sense, then saves it.</p></li>
+      <li><h3>Live database</h3><p>One shared database holds buses, routes, timetables and positions, and pushes changes out instantly.</p></li>
+      <li><h3>App and dashboard</h3><p>Riders and depot staff see the same data, so nobody has to phone anybody to find out.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="pilot" class="pilot">
+  <div class="wrap split">
+    <div>
+      <h2>Bring TrackBus to your depot.</h2>
+      <p class="big">We are starting with one pilot route, Belagavi to Chikkodi. Tell us about your depot and we will get in touch.</p>
+      <ul class="who">
+        <li>Depot managers and transport officials</li>
+        <li>Colleges that want student passes in an app</li>
+        <li>Anyone running regional buses who wants live tracking without a large fleet system</li>
+      </ul>
+    </div>
+    <form id="pilot-form" novalidate>
+      <div class="row">
+        <label>Your name<input name="full_name" autocomplete="name" required maxlength="80"></label>
+        <label>Depot or organisation<input name="organisation" autocomplete="organization" required maxlength="100"></label>
+      </div>
+      <div class="row">
+        <label>District<input name="district" maxlength="60" placeholder="Belagavi"></label>
+        <label>Phone<input name="phone" type="tel" autocomplete="tel" maxlength="20"></label>
+      </div>
+      <label>Email<input name="email" type="email" autocomplete="email" maxlength="120"></label>
+      <label>What would you like to track or manage?<textarea name="message" maxlength="600"></textarea></label>
+      <input class="hp" name="website" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <button class="btn amber" type="submit" id="pilot-btn">Send request</button>
+      <div class="msg" id="pilot-msg" role="status"></div>
+    </form>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>TrackBus. Built in Belagavi, Karnataka.</span>
+    <span><a href="/depot/">Depot login</a></span>
+  </div>
+</footer>
 
 <script>
-  // ============================================================
-  // CONFIG — fill these in
-  // ============================================================
-  const SUPABASE_URL = 'https://nlbbvahjcavhftxaozvf.supabase.co';
-  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sYmJ2YWhqY2F2aGZ0eGFvenZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3MjczMjMsImV4cCI6MjA5NjMwMzMyM30.FHygL7qhjoYAblKYZ1D_z9HgABnSjRDjqo-J2GV2WrM'; // Project Settings > API > anon public key
-  // ============================================================
-
-  // Google Maps key for the Live Map page (the "web" key, with this site's address
-  // added under Website restrictions). Leave empty to keep using OpenStreetMap.
-  const GOOGLE_MAPS_KEY = '';
-
-  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  const loginScreen = document.getElementById('login-screen');
-  const appShell = document.getElementById('app');
-  let map, markers = {}, buses = {}, busMeta = {}, maintenanceRecords = [];
-  let editingBusId = null;
-
-  // ---------- AUTH (welcome -> email -> password -> 2-step code) ----------
-  const $g = (id) => document.getElementById(id);
-  const IDLE_MINUTES = 15;
-  let gEmail = '', failCount = 0, lockedUntil = 0, idleTimer = null, enrolling = null;
-
-  function gShow(step) {
-    document.querySelectorAll('#gate .g-step').forEach(x => { x.hidden = x.dataset.step !== step; });
-    const first = document.querySelector(`#gate [data-step="${step}"] input:not([tabindex])`);
-    if (first) setTimeout(() => first.focus(), 30);
-  }
-  function gNotice(title, body) { $g('n-title').textContent = title; $g('n-body').textContent = body; gShow('notice'); }
-  function gErr(id, msg) { $g(id).textContent = msg || ''; }
-
-  document.querySelectorAll('#gate [data-go]').forEach(btn => btn.addEventListener('click', async () => {
-    const to = btn.dataset.go;
-    if (to === 'logout') { await sb.auth.signOut(); gShow('welcome'); return; }
-    if (to === 'welcome') { $g('g-pass').value = ''; }
-    gShow(to);
-  }));
-  $g('g-eye').addEventListener('click', () => {
-    const i = $g('g-pass'); const show = i.type === 'password';
-    i.type = show ? 'text' : 'password'; $g('g-eye').textContent = show ? 'Hide' : 'Show';
+(function () {
+  // ---------- hero: one bus, four stops ----------
+  var stops = [
+    { name: 'Belagavi CBT', x: 60 }, { name: 'Sankeshwar', x: 353 },
+    { name: 'Nipani', x: 647 }, { name: 'Chikkodi', x: 940 }
+  ];
+  var NS = 'http://www.w3.org/2000/svg';
+  var g = document.getElementById('stops');
+  stops.forEach(function (s) {
+    var c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', s.x); c.setAttribute('cy', 70); c.setAttribute('r', 13);
+    c.setAttribute('fill', '#0A1A2C'); c.setAttribute('stroke', '#F5A524'); c.setAttribute('stroke-width', 4);
+    g.appendChild(c);
+    var t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', s.x); t.setAttribute('y', 124); t.setAttribute('text-anchor', s.x === 60 ? 'start' : s.x === 940 ? 'end' : 'middle');
+    if (s.x === 60) t.setAttribute('x', 44); if (s.x === 940) t.setAttribute('x', 956);
+    t.setAttribute('fill', '#C9D6E4'); t.setAttribute('font-size', 17); t.setAttribute('font-family', 'Hanken Grotesk, sans-serif');
+    t.textContent = s.name; g.appendChild(t);
   });
+  var bus = document.getElementById('bus'), done = document.getElementById('done'), led = document.getElementById('led');
+  var MOVE = 6000, DWELL = 1600, LEG = MOVE + DWELL, TOTAL = LEG * (stops.length - 1) + DWELL;
+  function frame(now) {
+    var t = now % TOTAL, leg = Math.min(Math.floor(t / LEG), stops.length - 2), local = t - leg * LEG, x, text;
+    var a = stops[leg], b = stops[leg + 1];
+    if (t >= LEG * (stops.length - 1)) { x = stops[stops.length - 1].x; text = 'Arrived at ' + stops[stops.length - 1].name; }
+    else if (local < MOVE) {
+      var p = local / MOVE; p = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      x = a.x + (b.x - a.x) * p;
+      text = 'Next stop ' + b.name + '  ' + Math.max(1, Math.round((1 - local / MOVE) * 9)) + ' min';
+    } else { x = b.x; text = 'At ' + b.name; }
+    bus.setAttribute('transform', 'translate(' + x + ',70)');
+    done.setAttribute('x2', x);
+    if (led.textContent !== text) led.textContent = text;
+    if (!reduce) requestAnimationFrame(frame);
+  }
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) { bus.setAttribute('transform', 'translate(647,70)'); done.setAttribute('x2', 647); led.textContent = 'Next stop Chikkodi  4 min'; }
+  else requestAnimationFrame(frame);
 
-  $g('f-email').addEventListener('submit', (e) => {
+  // ---------- pilot form -> Supabase ----------
+  var SUPA = 'https://nlbbvahjcavhftxaozvf.supabase.co/rest/v1/pilot_requests';
+  var KEY = 'sb_publishable_vks3-LHIOvUwp9zihlBFGA_X-N-6KD9';
+  var form = document.getElementById('pilot-form'), msg = document.getElementById('pilot-msg'), btn = document.getElementById('pilot-btn');
+  form.addEventListener('submit', function (e) {
     e.preventDefault();
-    const v = $g('g-email').value.trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { gErr('e-email', 'Enter a valid email address'); return; }
-    gErr('e-email'); gEmail = v; $g('g-chip').textContent = v; gShow('password');
-  });
-
-  $g('f-pass').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if (Date.now() < lockedUntil) {
-      gErr('e-pass', 'Too many attempts. Try again in ' + Math.ceil((lockedUntil - Date.now()) / 60000) + ' min.'); return;
-    }
-    const btn = $g('g-pass-btn'); btn.disabled = true; btn.textContent = 'Checking...';
-    const { error } = await sb.auth.signInWithPassword({ email: gEmail, password: $g('g-pass').value });
-    btn.disabled = false; btn.textContent = 'Sign in';
-    if (error) {
-      failCount++;
-      if (failCount >= 5) { lockedUntil = Date.now() + 5 * 60000; failCount = 0; gErr('e-pass', 'Too many attempts. Locked for 5 minutes.'); }
-      else gErr('e-pass', 'Wrong email or password');   // same message either way: do not reveal which
-      return;
-    }
-    failCount = 0; $g('g-pass').value = ''; gErr('e-pass');
-    await afterPassword();
-  });
-
-  // Is this signed-in user depot staff? (any rider can sign in to Supabase, so the dashboard must check)
-  async function isStaff() {
-    let r = await sb.rpc('is_depot_staff');
-    if (r.error) r = await sb.rpc('is_depot_admin');
-    return !r.error && r.data === true;
-  }
-
-  async function afterPassword() {
-    if (!(await isStaff())) {
-      await sb.auth.signOut();
-      gShow('password'); gErr('e-pass', 'This account does not have depot access. Use "Request access".');
-      return;
-    }
-    const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
-    if (aal && aal.currentLevel === 'aal2') { enterApp(); return; }
-    const { data: f } = await sb.auth.mfa.listFactors();
-    const verified = (f && f.totp || []).find(x => x.status === 'verified');
-    if (verified) { enrolling = { factorId: verified.id }; gShow('mfa'); return; }
-    // first time: set up an authenticator app
-    for (const x of (f && f.all || [])) if (x.status !== 'verified') await sb.auth.mfa.unenroll({ factorId: x.id });
-    const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'TrackBus depot' });
-    if (error) { gShow('password'); gErr('e-pass', error.message); return; }
-    enrolling = { factorId: data.id };
-    $g('g-qr').innerHTML = '';
-    const img = document.createElement('img'); img.alt = 'QR code'; img.src = data.totp.qr_code; $g('g-qr').appendChild(img);
-    $g('g-secret').textContent = data.totp.secret;
-    gShow('enroll');
-  }
-
-  async function verifyCode(inputId, errId) {
-    const code = $g(inputId).value.replace(/\D/g, '');
-    if (code.length !== 6) { gErr(errId, 'Enter the 6-digit code'); return; }
-    const { data: ch, error: e1 } = await sb.auth.mfa.challenge({ factorId: enrolling.factorId });
-    if (e1) { gErr(errId, e1.message); return; }
-    const { error: e2 } = await sb.auth.mfa.verify({ factorId: enrolling.factorId, challengeId: ch.id, code });
-    if (e2) { gErr(errId, 'That code did not work. Check the time on your phone and try again.'); return; }
-    $g(inputId).value = ''; gErr(errId); enterApp();
-  }
-  $g('f-mfa').addEventListener('submit', (e) => { e.preventDefault(); verifyCode('g-code', 'e-mfa'); });
-  $g('f-enroll').addEventListener('submit', (e) => { e.preventDefault(); verifyCode('g-ecode', 'e-enroll'); });
-
-  $g('g-forgot').addEventListener('click', async () => {
-    await sb.auth.resetPasswordForEmail(gEmail, { redirectTo: location.origin + location.pathname });
-    gNotice('Check your email', 'If this email belongs to a depot account, a password reset link is on its way.');
-  });
-
-  $g('f-signup').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const email = $g('su-email').value.trim().toLowerCase(), pw = $g('su-pass').value;
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { gErr('e-signup', 'Enter a valid email address'); return; }
-    if (pw.length < 12 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) { gErr('e-signup', 'Use at least 12 characters, with letters and numbers'); return; }
-    if (pw !== $g('su-pass2').value) { gErr('e-signup', 'The two passwords do not match'); return; }
-    const { data, error } = await sb.auth.signUp({ email, password: pw, options: { emailRedirectTo: location.origin + location.pathname } });
-    if (error) { gErr('e-signup', error.message); return; }
-    gErr('e-signup'); $g('su-pass').value = ''; $g('su-pass2').value = '';
-    if (data && data.session) { gEmail = email; await afterPassword(); }
-    else gNotice('Check your email', 'We sent a link to ' + email + '. Open it, then sign in here.');
-  });
-
-  $g('f-request').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    if ($g('r-hp').value) { gNotice('Request sent', 'An admin will contact you.'); return; }   // bot trap
-    const row = { full_name: $g('r-name').value.trim(), email: $g('r-email').value.trim().toLowerCase(),
-                  depot: $g('r-depot').value.trim(), phone: $g('r-phone').value.trim() };
-    if (!row.full_name || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(row.email) || !row.depot) {
-      gErr('e-request', 'Name, a valid email and depot are required'); return; }
-    const { error } = await sb.from('depot_access_requests').insert(row);
-    if (error) { gErr('e-request', 'Could not send. Try again later.'); return; }
-    gErr('e-request'); gNotice('Request sent', 'An admin will verify you and create your account. You will be told by email.');
-  });
-
-  // sign out after IDLE_MINUTES without any activity
-  function armIdle() {
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(() => { logout('You were signed out after ' + IDLE_MINUTES + ' minutes of inactivity.'); }, IDLE_MINUTES * 60000);
-  }
-  ['click', 'keydown', 'mousemove', 'touchstart'].forEach(ev => window.addEventListener(ev, () => { if (idleTimer) armIdle(); }, { passive: true }));
-
-  async function logout(message) {
-    clearTimeout(idleTimer); idleTimer = null;
-    await sb.auth.signOut();
-    appShell.classList.remove('active');
-    loginScreen.style.display = 'flex';
-    if (message) gNotice('Signed out', message); else gShow('welcome');
-  }
-  document.getElementById('logout-btn').addEventListener('click', () => logout());
-
-  async function checkExistingSession() {
-    const { data } = await sb.auth.getSession();
-    gShow('welcome');
-    if (data.session) {
-      const { data: aal } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (aal && aal.currentLevel === 'aal2' && await isStaff()) { enterApp(); return; }
-      await sb.auth.signOut();   // half-finished or non-staff session: start again
-    }
-  }
-
-  function enterApp() {
-    loginScreen.style.display = 'none';
-    appShell.classList.add('active');
-    armIdle();
-    initNav();
-    loadAll();
-  }
-
-
-  // ============================================================
-  // STUDENT PASSES
-  // ============================================================
-  let studentRequests = [];
-  let spFilter = 'new';
-  let spOpenId = null;
-
-  function escHtml(v) {
-    return String(v == null ? '' : v).replace(/[&<>"']/g, c => (
-      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  }
-  function spDate(v) {
-    if (!v) return '-';
-    const d = new Date(v);
-    return isNaN(d) ? '-' : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
-  }
-  const SP_STATUS = { submitted: 'New', approved: 'Approved', rejected: 'Rejected', pass_issued: 'Pass issued' };
-  const SP_PAY = { pay_at_depot: 'Cash at counter', awaiting_payment: 'Awaiting UPI', verifying: 'Verify UPI', paid: 'Paid' };
-
-  async function loadStudentRequests() {
-    const { data, error } = await sb.from('student_pass_requests').select('*').order('created_at', { ascending: false }).limit(500);
-    if (error) {
-      console.error('student_pass_requests load error:', error.message);
-      document.getElementById('sp-sub').textContent = 'Could not load (run sql/01_student_pass.sql in Supabase): ' + error.message;
-      return;
-    }
-    studentRequests = data || [];
-  }
-
-  function spMatchesFilter(r) {
-    if (spFilter === 'all') return true;
-    if (spFilter === 'new') return r.status === 'submitted';
-    return r.status === spFilter;
-  }
-
-  function renderStudentTable() {
-    const q = (document.getElementById('sp-search').value || '').trim().toLowerCase();
-    const rows = studentRequests.filter(spMatchesFilter).filter(r => {
-      if (!q) return true;
-      return [r.full_name, r.institution, r.phone, r.pass_number, r.college_id_no, r.from_stop, r.to_stop]
-        .some(x => (x || '').toLowerCase().includes(q));
-    });
-    const body = document.getElementById('sp-table-body');
-    body.innerHTML = rows.map(r => `
-      <tr class="sp-row" data-id="${escHtml(r.id)}">
-        <td>${spDate(r.created_at)}</td>
-        <td><strong>${escHtml(r.full_name)}</strong><div style="color:var(--text-dim);font-size:12px">${escHtml(r.phone)}</div></td>
-        <td>${escHtml(r.institution)}<div style="color:var(--text-dim);font-size:12px">${escHtml(r.course)} · ${escHtml(r.year_of_study)}</div></td>
-        <td>${escHtml(r.from_stop)} → ${escHtml(r.to_stop)}</td>
-        <td>${escHtml(r.duration)}<div style="color:var(--text-dim);font-size:12px">₹${escHtml(r.amount)}</div></td>
-        <td><span class="badge ${escHtml(r.payment_status)}">${escHtml(SP_PAY[r.payment_status] || r.payment_status)}</span></td>
-        <td><span class="badge ${escHtml(r.status)}">${escHtml(SP_STATUS[r.status] || r.status)}</span></td>
-      </tr>`).join('');
-    document.getElementById('sp-empty').style.display = rows.length ? 'none' : 'block';
-    body.querySelectorAll('.sp-row').forEach(tr => tr.addEventListener('click', () => openStudentDrawer(tr.dataset.id)));
-
-    const fresh = studentRequests.filter(r => r.status === 'submitted').length;
-    const c = document.getElementById('sp-count');
-    c.textContent = fresh;
-    c.style.display = fresh ? 'inline-block' : 'none';
-  }
-
-  function initStudentUi() {
-    document.querySelectorAll('#sp-toolbar .sp-chip').forEach(b => b.addEventListener('click', () => {
-      spFilter = b.dataset.f;
-      document.querySelectorAll('#sp-toolbar .sp-chip').forEach(x => x.classList.toggle('on', x === b));
-      renderStudentTable();
-    }));
-    document.getElementById('sp-search').addEventListener('input', renderStudentTable);
-    document.getElementById('sp-backdrop').addEventListener('click', closeStudentDrawer);
-    sb.channel('student_pass_live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'student_pass_requests' }, async () => {
-        await loadStudentRequests();
-        renderStudentTable();
-        if (spOpenId) renderStudentDrawer();
+    msg.className = 'msg'; msg.textContent = '';
+    var f = new FormData(form);
+    if (f.get('website')) { msg.className = 'msg ok'; msg.textContent = 'Request sent.'; return; }
+    var row = {
+      full_name: (f.get('full_name') || '').trim(), organisation: (f.get('organisation') || '').trim(),
+      district: (f.get('district') || '').trim() || null, phone: (f.get('phone') || '').trim() || null,
+      email: (f.get('email') || '').trim() || null, message: (f.get('message') || '').trim() || null
+    };
+    if (!row.full_name || !row.organisation) { msg.className = 'msg err'; msg.textContent = 'Enter your name and your depot or organisation.'; return; }
+    if (!row.phone && !row.email) { msg.className = 'msg err'; msg.textContent = 'Enter a phone number or an email so we can reach you.'; return; }
+    if (row.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(row.email)) { msg.className = 'msg err'; msg.textContent = 'That email address does not look right.'; return; }
+    btn.disabled = true; btn.textContent = 'Sending...';
+    fetch(SUPA, { method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': KEY, 'Prefer': 'return=minimal' }, body: JSON.stringify(row) })
+      .then(function (r) {
+        if (!r.ok) throw new Error('bad status');
+        form.reset(); msg.className = 'msg ok'; msg.textContent = 'Request sent. We will contact you using the details you gave.';
       })
-      .subscribe();
-  }
-
-  function closeStudentDrawer() {
-    spOpenId = null;
-    document.getElementById('sp-drawer').classList.remove('open');
-    document.getElementById('sp-backdrop').classList.remove('open');
-  }
-
-  function openStudentDrawer(id) {
-    spOpenId = id;
-    document.getElementById('sp-drawer').classList.add('open');
-    document.getElementById('sp-backdrop').classList.add('open');
-    renderStudentDrawer();
-  }
-
-  async function signedDoc(path) {
-    if (!path) return null;
-    const { data, error } = await sb.storage.from('student-docs').createSignedUrl(path, 900);
-    return error ? null : data.signedUrl;
-  }
-
-  async function renderStudentDrawer() {
-    const r = studentRequests.find(x => x.id === spOpenId);
-    const el = document.getElementById('sp-drawer');
-    if (!r) { closeStudentDrawer(); return; }
-    const [photoUrl, idUrl] = await Promise.all([signedDoc(r.photo_path), signedDoc(r.id_card_path)]);
-    if (spOpenId !== r.id) return;
-
-    const kv = (k, v) => `<div class="k">${k}</div><div>${escHtml(v == null || v === '' ? '-' : v)}</div>`;
-    let actions = '';
-    if (r.status === 'submitted') {
-      actions = `
-        <div class="panel-label" style="margin-top:20px">Decision</div>
-        <div class="sp-actions">
-          <label style="font-size:12px;color:var(--text-dim)">Amount ₹</label>
-          <input class="sp-amount" id="sp-amount" type="number" min="0" value="${escHtml(r.amount || 0)}" style="width:100px" />
-          <button class="btn good" id="sp-approve">Approve details</button>
-        </div>
-        <div class="sp-actions">
-          <textarea id="sp-remarks" placeholder="Reason (required to reject, shown to the student)"></textarea>
-          <button class="btn danger" id="sp-reject">Reject</button>
-        </div>`;
-    } else if (r.status === 'approved') {
-      const paid = r.payment_status === 'paid';
-      actions = `
-        <div class="panel-label" style="margin-top:20px">Payment and pass</div>
-        ${r.payment_method === 'online' ? `<div class="sp-grid">${kv('UPI reference', r.payment_ref || 'not entered yet')}</div>` : ''}
-        <div class="sp-actions">
-          ${paid ? '' : `<button class="btn good" id="sp-paid">${r.payment_method === 'online' ? 'UPI payment verified' : 'Cash received'}</button>`}
-          <button class="btn primary" id="sp-issue" ${paid ? '' : 'data-also-pay="1"'}>${paid ? 'Issue pass' : 'Receive payment and issue pass'}</button>
-        </div>`;
-    } else if (r.status === 'pass_issued') {
-      actions = `<div class="sp-actions noprint"><button class="btn" id="sp-print">Print pass details</button></div>`;
-    } else if (r.status === 'rejected') {
-      actions = `<div class="empty-note">Rejected${r.remarks ? ': ' + escHtml(r.remarks) : ''}. The student can apply again from the app.</div>`;
-    }
-
-    el.innerHTML = `
-      <button class="close noprint" id="sp-close">×</button>
-      <h2>${escHtml(r.full_name)}</h2>
-      <div style="margin-bottom:14px"><span class="badge ${escHtml(r.status)}">${escHtml(SP_STATUS[r.status] || r.status)}</span>
-        <span class="badge ${escHtml(r.payment_status)}">${escHtml(SP_PAY[r.payment_status] || r.payment_status)}</span></div>
-
-      <div class="panel-label">Documents</div>
-      <div class="sp-docs">
-        <div class="doc">Photo${photoUrl ? `<img src="${escHtml(photoUrl)}" onclick="window.open(this.src)">` : '<div>not available</div>'}</div>
-        <div class="doc">College ID card${idUrl ? `<img src="${escHtml(idUrl)}" onclick="window.open(this.src)">` : '<div>not available</div>'}</div>
-      </div>
-
-      <div class="panel-label" style="margin-top:20px">Student</div>
-      <div class="sp-grid">
-        ${kv('Date of birth', spDate(r.dob))}${kv('Gender', r.gender)}${kv('Mobile', r.phone)}${kv('Email', r.email)}
-        ${kv('Address', r.address)}${kv('Guardian', r.guardian_name)}${kv('Guardian phone', r.guardian_phone)}
-      </div>
-
-      <div class="panel-label" style="margin-top:20px">College</div>
-      <div class="sp-grid">
-        ${kv('Institution', r.institution)}${kv('Course', r.course)}${kv('Year', r.year_of_study)}${kv('College ID / USN', r.college_id_no)}
-      </div>
-
-      <div class="panel-label" style="margin-top:20px">Pass</div>
-      <div class="sp-grid">
-        ${kv('Route', r.from_stop + ' → ' + r.to_stop)}${kv('Duration', r.duration)}${kv('Amount', '₹' + (r.amount || 0))}
-        ${kv('Payment method', r.payment_method === 'online' ? 'Online (UPI)' : 'Cash at depot')}
-        ${r.pass_number ? kv('Pass number', r.pass_number) + kv('Valid', spDate(r.valid_from) + ' to ' + spDate(r.valid_to)) : ''}
-        ${kv('Applied on', spDate(r.created_at))}
-      </div>
-      ${actions}`;
-
-    const $ = id => document.getElementById(id);
-    $('sp-close').onclick = closeStudentDrawer;
-    if ($('sp-approve')) $('sp-approve').onclick = () => spUpdate(r, { status: 'approved', amount: Number($('sp-amount').value) || 0, remarks: null });
-    if ($('sp-reject')) $('sp-reject').onclick = () => {
-      const why = $('sp-remarks').value.trim();
-      if (!why) { alert('Please type the reason. The student will see it.'); return; }
-      spUpdate(r, { status: 'rejected', remarks: why });
-    };
-    if ($('sp-paid')) $('sp-paid').onclick = () => spUpdate(r, { payment_status: 'paid' });
-    if ($('sp-issue')) $('sp-issue').onclick = () => {
-      const months = { monthly: 1, quarterly: 3, yearly: 12 }[r.duration] || 1;
-      const from = new Date();
-      const to = new Date(from);
-      to.setMonth(to.getMonth() + months);
-      to.setDate(to.getDate() - 1);
-      const iso = d => d.toISOString().slice(0, 10);
-      spUpdate(r, {
-        status: 'pass_issued',
-        payment_status: 'paid',
-        pass_number: 'NWK-' + from.getFullYear() + '-' + r.id.replace(/-/g, '').slice(0, 6).toUpperCase(),
-        valid_from: iso(from),
-        valid_to: iso(to),
-      });
-    };
-    if ($('sp-print')) $('sp-print').onclick = () => window.print();
-  }
-
-  async function spUpdate(r, patch) {
-    const { data: { session } } = await sb.auth.getSession();
-    const { error } = await sb.from('student_pass_requests')
-      .update({ ...patch, reviewed_at: new Date().toISOString(), reviewed_by: session?.user?.email || null })
-      .eq('id', r.id);
-    if (error) { alert('Could not save: ' + error.message); return; }
-    await loadStudentRequests();
-    renderStudentTable();
-    renderStudentDrawer();
-  }
-
-  // ---------- NAV ----------
-
-  function initNav() {
-    document.querySelectorAll('.nav-item').forEach(item => {
-      item.addEventListener('click', () => switchPage(item.dataset.page));
-    });
-  }
-
-  function switchPage(pageName) {
-    document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.page === pageName));
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById('page-' + pageName).classList.add('active');
-    if (pageName === 'map' && !map) {
-      setTimeout(initMap, 50);
-    } else if (map && map.invalidateSize) {
-      setTimeout(() => map.invalidateSize(), 50);
-    }
-  }
-
-  // ---------- LOAD ALL DATA ----------
-
-  async function loadAll() {
-    await loadProfile();
-    await loadBusNames();
-    await loadLocations();
-    await loadMaintenance();
-    renderOverview();
-    renderFleetTable();
-    renderDriversTable();
-    renderMaintenanceTable();
-    if (map) renderMapMarkers();
-    subscribeRealtime();
-    await loadStudentRequests();
-    renderStudentTable();
-    if (!window.__spUi) { window.__spUi = true; initStudentUi(); }
-  }
-
-  // ---------- WHO AM I: depot and role ----------
-  let me = { role: 'depot_admin', depotId: null, depotName: '', name: '' };
-  let depotFilter = '';
-  let depotList = [];
-  const isState = () => me.role === 'state_admin';
-
-  function scopedBuses(cols) {
-    let q = sb.from('buses').select(cols);
-    const d = isState() ? depotFilter : me.depotId;
-    if (d) q = q.eq('depot_id', d);
-    return q;
-  }
-
-  async function loadProfile() {
-    try {
-      const { data: { session } } = await sb.auth.getSession();
-      const email = ((session && session.user && session.user.email) || '').toLowerCase();
-      const r = await sb.from('depot_admins').select('depot_id, role, full_name, depots(name, code)').eq('email', email).limit(1);
-      if (r.error) console.warn('profile:', r.error.message);
-      const row = r.data && r.data[0];
-      if (row) me = { role: row.role || 'depot_admin', depotId: row.depot_id, depotName: row.depots ? row.depots.name : '', name: row.full_name || '', email };
-      const d = await sb.from('depots').select('id, name, code, district, helpline').order('name');
-      depotList = d.data || [];
-    } catch (e) { console.warn(e); }
-    renderDepotBadge();
-  }
-
-  function renderDepotBadge() {
-    const badge = document.getElementById('depot-badge');
-    badge.innerHTML = '';
-    const b = document.createElement('b'); const sp = document.createElement('span');
-    if (isState()) {
-      b.textContent = 'All depots'; sp.textContent = 'State admin';
-      badge.appendChild(b); badge.appendChild(sp);
-      const sel = document.createElement('select'); sel.id = 'depot-filter';
-      sel.innerHTML = '<option value="">Every depot</option>' + depotList.map(d => `<option value="${escHtml(d.id)}">${escHtml(d.name)}</option>`).join('');
-      sel.value = depotFilter;
-      sel.addEventListener('change', async () => {
-        depotFilter = sel.value;
-        await loadBusNames(); await loadLocations();
-        renderOverview(); renderFleetTable(); renderDriversTable(); if (map) renderMapMarkers();
-      });
-      badge.appendChild(sel);
-    } else {
-      b.textContent = me.depotName || 'No depot assigned'; sp.textContent = me.name ? me.name + ', depot admin' : 'Depot admin';
-      badge.appendChild(b); badge.appendChild(sp);
-    }
-    document.getElementById('nav-admin').style.display = isState() ? '' : 'none';
-    const opts = (isState() ? depotList : depotList.filter(d => d.id === me.depotId));
-    const o = opts.map(d => `<option value="${escHtml(d.id)}">${escHtml(d.name)}</option>`).join('');
-    const bd = document.getElementById('bf-depot_id');
-    bd.innerHTML = (isState() ? '<option value="">Choose a depot</option>' : '') + o;
-    bd.disabled = !isState();
-    document.getElementById('as-depot').innerHTML = depotList.map(d => `<option value="${escHtml(d.id)}">${escHtml(d.name)}</option>`).join('');
-  }
-
-  // ---------- DEPOTS AND STAFF PAGE ----------
-  async function loadAdmin() {
-    const [dp, st, pr, ar] = await Promise.all([
-      sb.from('depots').select('*').order('name'),
-      sb.from('depot_admins').select('email, full_name, role, depot_id').order('email'),
-      sb.from('pilot_requests').select('*').order('created_at', { ascending: false }).limit(100),
-      sb.from('depot_access_requests').select('*').order('created_at', { ascending: false }).limit(100),
-    ]);
-    depotList = dp.data || depotList;
-    const depotName = (id) => { const d = depotList.find(x => x.id === id); return d ? d.name : '—'; };
-
-    document.getElementById('adm-depots').innerHTML = depotList.map(d =>
-      `<tr><td>${escHtml(d.name)}</td><td>${escHtml(d.code || '—')}</td><td>${escHtml(d.district || '—')}</td><td>${escHtml(d.helpline || '—')}</td></tr>`).join('')
-      || '<tr><td colspan="4" class="empty-note">No depots yet.</td></tr>';
-
-    document.getElementById('adm-staff').innerHTML = (st.data || []).map(a =>
-      `<tr><td>${escHtml(a.email)}</td><td>${escHtml(a.full_name || '—')}</td><td>${escHtml(depotName(a.depot_id))}</td>
-        <td>${a.role === 'state_admin' ? 'State admin' : 'Depot admin'}</td>
-        <td><button class="btn danger" data-rm="${escHtml(a.email)}">Remove</button></td></tr>`).join('')
-      || '<tr><td colspan="5" class="empty-note">No staff yet.</td></tr>';
-    document.querySelectorAll('#adm-staff button[data-rm]').forEach(btn => btn.addEventListener('click', async () => {
-      const email = btn.dataset.rm;
-      if (me.email && email.toLowerCase() === me.email.toLowerCase()) { alert('You cannot remove your own access.'); return; }
-      if (!confirm('Remove sign-in access for ' + email + '?')) return;
-      const { error } = await sb.from('depot_admins').delete().eq('email', email);
-      if (error) { alert('Could not remove: ' + error.message); return; }
-      loadAdmin();
-    }));
-
-    const reqs = [];
-    (pr.data || []).forEach(r => reqs.push({ t: 'pilot_requests', id: r.id, at: r.created_at, name: r.full_name, org: [r.organisation, r.district].filter(Boolean).join(', '), contact: [r.phone, r.email].filter(Boolean).join(' / '), msg: r.message || '', status: r.status }));
-    (ar.data || []).forEach(r => reqs.push({ t: 'depot_access_requests', id: r.id, at: r.created_at, name: r.full_name, org: r.depot, contact: [r.phone, r.email].filter(Boolean).join(' / '), msg: 'Access request', status: r.status }));
-    reqs.sort((a, b) => String(b.at).localeCompare(String(a.at)));
-    document.getElementById('adm-requests').innerHTML = reqs.map(r =>
-      `<tr><td>${escHtml(new Date(r.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }))}</td><td>${escHtml(r.name)}</td><td>${escHtml(r.org)}</td>
-        <td>${escHtml(r.contact || '—')}</td><td>${escHtml(r.msg)}</td>
-        <td>${r.status === 'new' ? `<button class="btn" data-done="${escHtml(r.t + '|' + r.id)}">Mark contacted</button>` : escHtml(r.status)}</td></tr>`).join('')
-      || '<tr><td colspan="6" class="empty-note">No requests yet.</td></tr>';
-    document.querySelectorAll('#adm-requests button[data-done]').forEach(btn => btn.addEventListener('click', async () => {
-      const [t, id] = btn.dataset.done.split('|');
-      const { error } = await sb.from(t).update({ status: 'contacted' }).eq('id', id);
-      if (error) { alert('Could not update: ' + error.message); return; }
-      loadAdmin();
-    }));
-  }
-
-  document.getElementById('nav-admin').addEventListener('click', loadAdmin);
-
-  document.getElementById('ad-add').addEventListener('click', async () => {
-    const v = (id) => document.getElementById(id).value.trim();
-    if (!v('ad-name')) { alert('Enter the depot name.'); return; }
-    const { error } = await sb.from('depots').insert({ name: v('ad-name'), code: v('ad-code') || null, district: v('ad-district') || null, helpline: v('ad-helpline') || null });
-    if (error) { alert('Could not add the depot: ' + error.message); return; }
-    ['ad-name', 'ad-code', 'ad-district', 'ad-helpline'].forEach(id => { document.getElementById(id).value = ''; });
-    await loadAdmin(); renderDepotBadge();
+      .catch(function () { msg.className = 'msg err'; msg.textContent = 'Could not send the request. Check your connection and try again.'; })
+      .then(function () { btn.disabled = false; btn.textContent = 'Send request'; });
   });
-
-  document.getElementById('as-add').addEventListener('click', async () => {
-    const email = document.getElementById('as-email').value.trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { alert('Enter a valid email address.'); return; }
-    const depot_id = document.getElementById('as-depot').value;
-    const role = document.getElementById('as-role').value;
-    if (role === 'depot_admin' && !depot_id) { alert('Choose a depot.'); return; }
-    const { error } = await sb.from('depot_admins').insert({ email, full_name: document.getElementById('as-name').value.trim() || null, depot_id: depot_id || null, role });
-    if (error) { alert('Could not add: ' + error.message); return; }
-    document.getElementById('as-email').value = ''; document.getElementById('as-name').value = '';
-    loadAdmin();
-  });
-
-  async function loadBusNames() {
-    const { data, error } = await scopedBuses('*').limit(1000);
-    if (error) { console.error('buses load error:', error.message); return; }
-    busMeta = {};
-    (data || []).forEach(b => { busMeta[b.id] = b; });
-  }
-
-  async function loadLocations() {
-    const { data, error } = await sb.from('bus_locations').select('*');
-    if (error) { console.error('bus_locations load error:', error.message); return; }
-    buses = {};
-    (data || []).forEach(loc => { if (busMeta[loc.bus_id]) buses[loc.bus_id] = loc; });
-  }
-
-  async function loadMaintenance() {
-    const { data, error } = await sb.from('bus_maintenance').select('*').order('reported_at', { ascending: false });
-    if (error) { console.error('bus_maintenance load error:', error.message); return; }
-    maintenanceRecords = data || [];
-  }
-
-  function subscribeRealtime() {
-    sb.channel('bus_locations_live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bus_locations' }, (payload) => {
-        if (payload.eventType === 'DELETE') delete buses[payload.old.id];
-        else if (busMeta[payload.new.bus_id]) buses[payload.new.bus_id] = payload.new;
-        renderOverview();
-        renderFleetTable();
-        if (map) renderMapMarkers();
-      })
-      .subscribe();
-
-    sb.channel('bus_maintenance_live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'bus_maintenance' }, async () => {
-        await loadMaintenance();
-        renderOverview();
-        renderMaintenanceTable();
-      })
-      .subscribe();
-  }
-
-  function isStale(updatedAt) {
-    if (!updatedAt) return true;
-    return (Date.now() - new Date(updatedAt).getTime()) > 2 * 60 * 1000;
-  }
-
-  // ---------- OVERVIEW PAGE ----------
-
-  function renderOverview() {
-    document.getElementById('overview-time').textContent = new Date().toLocaleString();
-    const entries = Object.values(buses);
-    const total = Object.keys(busMeta).length;
-    const active = entries.filter(b => b.status === 'active' && !isStale(b.updated_at)).length;
-    const breakdown = entries.filter(b => b.status === 'breakdown').length;
-    const stale = entries.filter(b => isStale(b.updated_at)).length;
-
-    document.getElementById('stat-total').textContent = total;
-    document.getElementById('stat-active').textContent = active;
-    document.getElementById('stat-breakdown').textContent = breakdown;
-    document.getElementById('stat-stale').textContent = stale;
-
-    const alertsHost = document.getElementById('overview-alerts');
-    const breakdownBuses = entries.filter(b => b.status === 'breakdown');
-    alertsHost.innerHTML = breakdownBuses.length
-      ? breakdownBuses.map(b => {
-          const meta = busMeta[b.bus_id] || {};
-          return `<div class="alert-row" data-bus="${b.bus_id}">
-            <span><b>${escHtml(meta.bus_no || b.bus_id.slice(0,8))}</b> — ${escHtml(meta.route || 'Unknown route')}</span>
-            <span class="go">View on map →</span>
-          </div>`;
-        }).join('')
-      : `<div class="empty-note">No active breakdown alerts.</div>`;
-
-    alertsHost.querySelectorAll('.alert-row').forEach(row => {
-      row.addEventListener('click', () => {
-        switchPage('map');
-        setTimeout(() => focusBusOnMap(row.dataset.bus), 200);
-      });
-    });
-
-    const repairsHost = document.getElementById('overview-repairs');
-    const openRepairs = maintenanceRecords.filter(m => !m.resolved_at);
-    repairsHost.innerHTML = openRepairs.length
-      ? `<table class="data-table"><thead><tr><th>Bus</th><th>Issue</th><th>Mechanic</th><th>Since</th></tr></thead><tbody>` +
-        openRepairs.map(m => {
-          const meta = busMeta[m.bus_id] || {};
-          return `<tr>
-            <td>${escHtml(meta.bus_no || m.bus_id.slice(0,8))}</td>
-            <td>${escHtml(m.notes || m.issue_description || '—')}</td>
-            <td>${m.mechanic_dispatched ? 'Dispatched' : 'Not yet'}</td>
-            <td>${new Date(m.reported_at).toLocaleString()}</td>
-          </tr>`;
-        }).join('') + `</tbody></table>`
-      : `<div class="empty-note">No buses currently under repair.</div>`;
-  }
-
-  // ---------- LIVE MAP PAGE ----------
-
-  let useGoogle = false;
-  let gInfo = null;
-  let mapStarting = false;
-
-  function loadGoogleMaps() {
-    return new Promise((resolve, reject) => {
-      if (window.google && google.maps) { resolve(); return; }
-      window.__gmReady = () => resolve();
-      const sc = document.createElement('script');
-      sc.src = 'https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(GOOGLE_MAPS_KEY) + '&callback=__gmReady';
-      sc.onerror = () => reject(new Error('Google Maps script did not load'));
-      document.head.appendChild(sc);
-    });
-  }
-
-  // Google calls this when the key is rejected: fall back to OpenStreetMap
-  window.gm_authFailure = () => {
-    console.error('Google Maps rejected the key (check Maps JavaScript API + website restrictions).');
-    if (!useGoogle) return;
-    useGoogle = false;
-    Object.keys(markers).forEach(k => delete markers[k]);
-    document.getElementById('live-map').innerHTML = '';
-    map = null;
-    initLeafletMap();
-  };
-
-  async function initMap() {
-    if (mapStarting || map) return;
-    mapStarting = true;
-    if (GOOGLE_MAPS_KEY) {
-      try {
-        await loadGoogleMaps();
-        const g = new google.maps.Map(document.getElementById('live-map'), {
-          center: { lat: 15.8497, lng: 74.4977 }, zoom: 10,
-          mapTypeControl: false, streetViewControl: false, fullscreenControl: false,
-        });
-        gInfo = new google.maps.InfoWindow();
-        useGoogle = true;
-        map = {
-          g,
-          invalidateSize() { google.maps.event.trigger(g, 'resize'); },
-          setView(ll, z) { g.setCenter({ lat: ll[0], lng: ll[1] }); g.setZoom(z); },
-        };
-        renderMapMarkers();
-        return;
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    initLeafletMap();
-  }
-
-  function initLeafletMap() {
-    map = L.map('live-map', { zoomControl: true }).setView([15.8497, 74.4977], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(map);
-    setTimeout(() => map.invalidateSize(), 100);
-    renderMapMarkers();
-  }
-
-  function busIcon(status, label) {
-    const cls = status === 'breakdown' ? 'breakdown' : status === 'idle' ? 'idle' : 'active';
-    if (useGoogle) return { cls, label };
-    return L.divIcon({
-      className: '',
-      html: `<div class="bus-marker-icon ${cls}">${label}</div>`,
-      iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -15],
-    });
-  }
-
-  function gIcon(icon) {
-    const fill = { active: '#34d399', breakdown: '#f2545b', idle: '#f5a623' }[icon.cls] || '#34d399';
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">' +
-      '<circle cx="20" cy="20" r="15" fill="' + fill + '" stroke="#0b1320" stroke-width="3"/>' +
-      '<text x="20" y="24" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle" fill="#0b1320">' +
-      escHtml(icon.label) + '</text></svg>';
-    return {
-      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
-      scaledSize: new google.maps.Size(40, 40),
-      anchor: new google.maps.Point(20, 20),
-    };
-  }
-
-  // one marker object with the same small API for Leaflet and Google
-  function makeMarker(lat, lng, icon) {
-    if (!useGoogle) return L.marker([lat, lng], { icon }).addTo(map);
-    const m = new google.maps.Marker({ position: { lat, lng }, map: map.g, icon: gIcon(icon) });
-    let html = '';
-    const open = () => { gInfo.setContent('<div style="color:#111;font-size:13px">' + html + '</div>'); gInfo.open({ map: map.g, anchor: m }); };
-    m.addListener('click', open);
-    return {
-      setLatLng(p) { m.setPosition({ lat: p[0], lng: p[1] }); },
-      setIcon(i) { m.setIcon(gIcon(i)); },
-      bindPopup(h) { html = h; },
-      openPopup: open,
-    };
-  }
-
-  function renderMapMarkers() {
-    Object.values(buses).forEach(loc => {
-      const meta = busMeta[loc.bus_id];
-      const label = meta && meta.bus_no ? meta.bus_no.slice(-2) : '?';
-      const icon = busIcon(loc.status, label);
-      if (markers[loc.bus_id]) {
-        markers[loc.bus_id].setLatLng([loc.latitude, loc.longitude]);
-        markers[loc.bus_id].setIcon(icon);
-      } else {
-        markers[loc.bus_id] = makeMarker(loc.latitude, loc.longitude, icon);
-      }
-      markers[loc.bus_id].bindPopup(popupHtml(loc));
-    });
-    renderBusList();
-  }
-
-  function popupHtml(loc) {
-    const meta = busMeta[loc.bus_id] || {};
-    const name = escHtml(meta.bus_no || loc.bus_id.slice(0, 8));
-    const route = escHtml(meta.route || 'Unknown route');
-    const driver = meta.driver_name ? `<br/>Driver: ${escHtml(meta.driver_name)}` : '';
-    const updated = new Date(loc.updated_at).toLocaleTimeString();
-    return `<b>${name}</b><br/>${route}${driver}<br/>Status: ${loc.status}<br/>Updated: ${updated}`;
-  }
-
-  function focusBusOnMap(busId) {
-    const loc = buses[busId];
-    if (loc && map) {
-      map.setView([loc.latitude, loc.longitude], 14);
-      if (markers[busId]) markers[busId].openPopup();
-      if (loc.status === 'breakdown') showBreakdownPanel(busId);
-    }
-  }
-
-  function renderBusList() {
-    const list = document.getElementById('bus-list');
-    const emptyState = document.getElementById('empty-state');
-    const entries = Object.values(buses);
-
-    if (entries.length === 0) { list.innerHTML = ''; emptyState.style.display = 'block'; return; }
-    emptyState.style.display = 'none';
-
-    list.innerHTML = entries.map(loc => {
-      const meta = busMeta[loc.bus_id] || {};
-      const name = escHtml(meta.bus_no || loc.bus_id.slice(0, 8));
-      const route = escHtml(meta.route || '—');
-      const stale = isStale(loc.updated_at);
-      const pillClass = stale ? 'stale' : loc.status;
-      const pillLabel = stale ? 'no signal' : loc.status;
-      const updated = new Date(loc.updated_at).toLocaleTimeString();
-
-      return `
-        <div class="bus-card" data-bus="${loc.bus_id}">
-          <div class="row1"><span class="bus-name">${name}</span><span class="badge ${pillClass}">${pillLabel}</span></div>
-          <div class="meta">${route} · updated ${updated}</div>
-          <div class="actions">
-            ${loc.status !== 'breakdown'
-              ? `<button class="btn" data-action="breakdown" data-bus="${loc.bus_id}">Mark breakdown</button>`
-              : `<button class="btn" data-action="active" data-bus="${loc.bus_id}">Mark active</button>`}
-          </div>
-        </div>`;
-    }).join('');
-
-    list.querySelectorAll('.bus-card').forEach(card => {
-      card.addEventListener('click', (e) => {
-        if (e.target.tagName === 'BUTTON') return;
-        focusBusOnMap(card.dataset.bus);
-      });
-    });
-
-    list.querySelectorAll('button[data-action]').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const busId = btn.dataset.bus;
-        const newStatus = btn.dataset.action;
-        const { error } = await sb.from('bus_locations').update({ status: newStatus }).eq('bus_id', busId);
-        if (error) { alert('Failed to update status: ' + error.message); return; }
-        if (newStatus === 'breakdown') showBreakdownPanel(busId);
-        else hideBreakdownPanel();
-      });
-    });
-  }
-
-  // ---------- BREAKDOWN RESPONSE PANEL ----------
-
-  function haversineKm(lat1, lon1, lat2, lon2) {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) ** 2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  }
-
-  function findNearestSameRouteBuses(brokenBusId) {
-    const broken = buses[brokenBusId];
-    const brokenMeta = busMeta[brokenBusId];
-    if (!broken || !brokenMeta) return [];
-    return Object.values(buses)
-      .filter(loc => loc.bus_id !== brokenBusId && loc.status === 'active' && !isStale(loc.updated_at))
-      .filter(loc => { const meta = busMeta[loc.bus_id]; return meta && meta.route === brokenMeta.route; })
-      .map(loc => ({ loc, meta: busMeta[loc.bus_id], distanceKm: haversineKm(broken.latitude, broken.longitude, loc.latitude, loc.longitude) }))
-      .sort((a, b) => a.distanceKm - b.distanceKm)
-      .slice(0, 3);
-  }
-
-  function getOpenMaintenanceFor(busId) {
-    return maintenanceRecords.find(m => m.bus_id === busId && !m.resolved_at) || null;
-  }
-
-  function breakdownPanelHtml(busId, nearest, maintenance) {
-    const meta = busMeta[busId] || {};
-    const nearestHtml = nearest.length
-      ? nearest.map(n => `<div class="nearby-bus"><div><b>${escHtml(n.meta.bus_no)}</b> · ${n.distanceKm.toFixed(1)} km away</div><div class="meta">${escHtml(n.meta.driver_name || 'No driver on file')} ${escHtml(n.meta.driver_phone ? '· ' + n.meta.driver_phone : '')}</div></div>`).join('')
-      : `<div class="meta">No other active bus found on this route right now.</div>`;
-
-    return `
-      <div class="breakdown-panel">
-        <h3>⚠ ${escHtml(meta.bus_no || 'Bus')} — Breakdown</h3>
-        <div class="meta">Driver: ${escHtml(meta.driver_name || '—')} ${escHtml(meta.driver_phone ? '· ' + meta.driver_phone : '')}</div>
-        <div class="panel-section">
-          <div class="panel-label">Nearest buses on same route</div>
-          ${nearestHtml}
-        </div>
-        <div class="panel-section">
-          <div class="panel-label">Repair status</div>
-          <label class="dispatch-toggle"><input type="checkbox" id="mechanic-dispatched-cb" ${maintenance && maintenance.mechanic_dispatched ? 'checked' : ''} /> Mechanic dispatched</label>
-          <textarea id="maintenance-notes" placeholder="Issue description / notes...">${escHtml(maintenance && maintenance.notes ? maintenance.notes : '')}</textarea>
-          <div class="panel-actions">
-            <button id="save-maintenance-btn">Save</button>
-            <button id="resolve-maintenance-btn" class="resolve-btn">Mark resolved</button>
-          </div>
-        </div>
-      </div>`;
-  }
-
-  async function showBreakdownPanel(busId) {
-    const panelHost = document.getElementById('breakdown-panel-host');
-    const nearest = findNearestSameRouteBuses(busId);
-    const maintenance = getOpenMaintenanceFor(busId);
-
-    panelHost.innerHTML = breakdownPanelHtml(busId, nearest, maintenance);
-    panelHost.style.display = 'block';
-
-    document.getElementById('save-maintenance-btn').addEventListener('click', async () => {
-      const dispatched = document.getElementById('mechanic-dispatched-cb').checked;
-      const notes = document.getElementById('maintenance-notes').value;
-      if (maintenance) {
-        await sb.from('bus_maintenance').update({ mechanic_dispatched: dispatched, notes }).eq('id', maintenance.id);
-      } else {
-        await sb.from('bus_maintenance').insert({ bus_id: busId, mechanic_dispatched: dispatched, notes });
-      }
-      await loadMaintenance();
-      showBreakdownPanel(busId);
-      renderMaintenanceTable();
-      renderOverview();
-    });
-
-    document.getElementById('resolve-maintenance-btn').addEventListener('click', async () => {
-      const openRecord = getOpenMaintenanceFor(busId);
-      if (openRecord) {
-        await sb.from('bus_maintenance').update({ resolved_at: new Date().toISOString() }).eq('id', openRecord.id);
-      }
-      await sb.from('bus_locations').update({ status: 'active' }).eq('bus_id', busId);
-      hideBreakdownPanel();
-      await loadMaintenance();
-      renderMaintenanceTable();
-      renderOverview();
-    });
-  }
-
-  function hideBreakdownPanel() {
-    const panelHost = document.getElementById('breakdown-panel-host');
-    panelHost.style.display = 'none';
-    panelHost.innerHTML = '';
-  }
-
-  // ---------- FLEET PAGE ----------
-
-  function docStatus(m) {
-    const ds = [m.insurance_expiry, m.fitness_expiry, m.puc_expiry, m.permit_expiry].filter(Boolean);
-    if (!ds.length) return { cls: 'stale', label: 'not added' };
-    const days = Math.floor((Math.min(...ds.map(d => new Date(d).getTime())) - Date.now()) / 86400000);
-    if (days < 0) return { cls: 'breakdown', label: 'expired' };
-    if (days <= 30) return { cls: 'idle', label: 'due in ' + days + ' d' };
-    return { cls: 'active', label: 'valid' };
-  }
-
-  function renderFleetTable() {
-    const body = document.getElementById('fleet-table-body');
-    const rows = Object.values(busMeta).map(meta => {
-      const loc = buses[meta.id];
-      const stale = loc ? isStale(loc.updated_at) : true;
-      const status = loc ? (stale ? 'stale' : loc.status) : 'stale';
-      const statusLabel = meta.is_active === false ? 'out of service' : (loc ? (stale ? 'no signal' : loc.status) : 'no data yet');
-      const doc = docStatus(meta);
-      const type = [meta.service_type, meta.is_ac ? 'AC' : ''].filter(Boolean).join(' · ');
-      return `
-        <tr>
-          <td>${escHtml(meta.bus_no || '—')}${type ? `<span class="sub-line">${escHtml(type)}</span>` : ''}</td>
-          <td>${escHtml(meta.route || '—')}</td>
-          <td>${escHtml(meta.driver_name || '—')}${meta.driver_phone ? `<span class="sub-line">${escHtml(meta.driver_phone)}</span>` : ''}</td>
-          <td>${escHtml(meta.conductor_name || '—')}${meta.conductor_phone ? `<span class="sub-line">${escHtml(meta.conductor_phone)}</span>` : ''}</td>
-          <td>${meta.seats != null ? escHtml(meta.seats) : '—'}</td>
-          <td><span class="badge ${doc.cls}">${doc.label}</span></td>
-          <td><span class="badge ${status}">${statusLabel}</span></td>
-          <td><button class="btn" data-edit="${escHtml(meta.id)}">Edit</button></td>
-        </tr>`;
-    }).join('');
-    body.innerHTML = rows || `<tr><td colspan="8" class="empty-note">No buses added yet.</td></tr>`;
-
-    body.querySelectorAll('button[data-edit]').forEach(btn => {
-      btn.addEventListener('click', () => openBusModal(btn.dataset.edit));
-    });
-  }
-
-
-  // ---------- BUS EDITOR ----------
-  const BF = {
-    bus_no: 'req', depot_id: 's', fleet_no: 't', service_type: 's', fuel_type: 's', make: 't', model: 't', mfg_year: 'n',
-    seats: 'n', standing_capacity: 'n', ladies_seats: 'n', is_ac: 'b', wheelchair_accessible: 'b', is_active: 'b',
-    driver_name: 't', driver_phone: 't', driver_licence_no: 't', driver_emp_id: 't',
-    conductor_name: 't', conductor_phone: 't', conductor_emp_id: 't',
-    emergency_phone: 't', depot_control_phone: 't', route: 't', fare_full: 'n',
-    permit_no: 't', permit_expiry: 'd', insurance_expiry: 'd', fitness_expiry: 'd', puc_expiry: 'd',
-    last_service_date: 'd', next_service_due: 'd', odometer_km: 'n', notes: 't'
-  };
-  const bf = (k) => document.getElementById('bf-' + k);
-  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  let stopRows = [];
-  let knownStops = null;
-
-  function setBusForm(meta) {
-    Object.keys(BF).forEach(k => {
-      const el = bf(k);
-      if (BF[k] === 'b') el.checked = meta ? (k === 'is_active' ? meta[k] !== false : !!meta[k]) : (k === 'is_active');
-      else el.value = meta && meta[k] != null ? meta[k] : '';
-    });
-    const od = meta && meta.operating_days ? String(meta.operating_days) : 'Daily';
-    document.querySelectorAll('#bf-days .od').forEach(c => { c.checked = od === 'Daily' || od.split(',').includes(c.value); });
-  }
-
-  function readBusForm() {
-    const out = {};
-    for (const k of Object.keys(BF)) {
-      const el = bf(k), kind = BF[k];
-      if (kind === 'b') out[k] = el.checked;
-      else if (kind === 'n') {
-        if (el.value === '') out[k] = null;
-        else { const v = Number(el.value); if (!isFinite(v) || v < 0) return { error: 'Enter a valid number for "' + k.replace(/_/g, ' ') + '".' }; out[k] = v; }
-      }
-      else if (kind === 'd') out[k] = el.value || null;
-      else out[k] = el.value.trim() || null;
-    }
-    if (!out.bus_no) return { error: 'Bus number is required.' };
-    const days = [...document.querySelectorAll('#bf-days .od')].filter(c => c.checked).map(c => c.value);
-    out.operating_days = days.length === 7 ? 'Daily' : (days.length ? days.join(',') : null);
-    return { payload: out };
-  }
-
-  function to24(t) {
-    if (!t) return '';
-    const m = String(t).trim().match(/^(\d{1,2})[:.](\d{2})\s*([AaPp][Mm])?$/);
-    if (!m) return '';
-    let h = parseInt(m[1], 10);
-    if (m[3]) { h = h % 12; if (/p/i.test(m[3])) h += 12; }
-    return h > 23 ? '' : String(h).padStart(2, '0') + ':' + m[2];
-  }
-  function to12(t24) {
-    if (!t24) return null;
-    const parts = t24.split(':'); let h = parseInt(parts[0], 10);
-    const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12;
-    return String(h).padStart(2, '0') + ':' + parts[1] + ' ' + ap;
-  }
-
-  async function loadKnownStops() {
-    if (knownStops) return;
-    knownStops = {};
-    const { data } = await sb.from('bus_stops').select('name, latitude, longitude').limit(5000);
-    const dl = document.getElementById('known-stops'); dl.innerHTML = '';
-    (data || []).forEach(st => {
-      knownStops[String(st.name).toLowerCase()] = st;
-      const o = document.createElement('option'); o.value = st.name; dl.appendChild(o);
-    });
-  }
-
-  function mkInput(type, value, ph) {
-    const e = document.createElement('input');
-    e.type = type; e.value = value == null ? '' : value; if (ph) e.placeholder = ph;
-    if (type === 'number') e.step = 'any';
-    return e;
-  }
-
-  function renderStops() {
-    const host = document.getElementById('stops-list'); host.innerHTML = '';
-    stopRows.forEach((r, i) => {
-      const row = document.createElement('div'); row.className = 'stop-row';
-      const num = document.createElement('span'); num.className = 'stop-num'; num.textContent = i + 1;
-      const name = mkInput('text', r.name, 'Stop name'); name.setAttribute('list', 'known-stops');
-      const time = mkInput('time', r.time);
-      const lat = mkInput('number', r.lat, 'auto');
-      const lng = mkInput('number', r.lng, 'auto');
-      name.addEventListener('input', () => { r.name = name.value; updateStopsCount(); });
-      name.addEventListener('change', () => {
-        const k = knownStops && knownStops[name.value.trim().toLowerCase()];
-        if (k && (lat.value === '' && lng.value === '')) { r.lat = k.latitude; r.lng = k.longitude; lat.value = r.lat; lng.value = r.lng; }
-      });
-      time.addEventListener('input', () => { r.time = time.value; });
-      lat.addEventListener('input', () => { r.lat = lat.value; });
-      lng.addEventListener('input', () => { r.lng = lng.value; });
-      const btns = document.createElement('div'); btns.className = 'stop-btns';
-      const mk = (txt, title, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = txt; b.title = title; b.addEventListener('click', fn); return b; };
-      btns.appendChild(mk('↑', 'Move up', () => { if (i > 0) { [stopRows[i - 1], stopRows[i]] = [stopRows[i], stopRows[i - 1]]; renderStops(); } }));
-      btns.appendChild(mk('↓', 'Move down', () => { if (i < stopRows.length - 1) { [stopRows[i + 1], stopRows[i]] = [stopRows[i], stopRows[i + 1]]; renderStops(); } }));
-      btns.appendChild(mk('✕', 'Remove', () => { stopRows.splice(i, 1); renderStops(); }));
-      [num, name, time, lat, lng, btns].forEach(x => row.appendChild(x));
-      host.appendChild(row);
-    });
-    updateStopsCount();
-  }
-
-  function updateStopsCount() {
-    const named = stopRows.filter(r => r.name.trim());
-    document.getElementById('stops-count').textContent = named.length
-      ? named.length + ' stops · ' + named[0].name.trim() + ' to ' + named[named.length - 1].name.trim() : 'No stops yet';
-  }
-
-  document.getElementById('stop-add').addEventListener('click', () => {
-    stopRows.push({ name: '', time: '', lat: '', lng: '' }); renderStops();
-    const rows = document.querySelectorAll('#stops-list .stop-row'); const last = rows[rows.length - 1];
-    if (last) last.querySelector('input').focus();
-  });
-  document.getElementById('stop-bulk-toggle').addEventListener('click', () => {
-    const box = document.getElementById('stops-bulk'); box.style.display = box.style.display === 'none' ? 'flex' : 'none';
-  });
-  document.getElementById('stops-bulk-add').addEventListener('click', () => {
-    const lines = document.getElementById('stops-bulk-text').value.split('\n').map(l => l.trim()).filter(Boolean);
-    if (stopRows.length && stopRows.every(r => !r.name.trim() && !r.time)) stopRows = [];
-    lines.forEach(line => {
-      const p = line.split(',').map(x => x.trim());
-      const k = knownStops && knownStops[p[0].toLowerCase()];
-      stopRows.push({ name: p[0], time: to24(p[1]), lat: p[2] || (k ? k.latitude : ''), lng: p[3] || (k ? k.longitude : '') });
-    });
-    document.getElementById('stops-bulk-text').value = ''; document.getElementById('stops-bulk').style.display = 'none';
-    renderStops();
-  });
-
-  document.getElementById('add-bus-btn').addEventListener('click', () => openBusModal(null));
-
-  async function openBusModal(busId) {
-    editingBusId = busId;
-    const meta = busId ? busMeta[busId] : null;
-    document.getElementById('modal-title').textContent = busId ? 'Edit Bus' : 'Add Bus';
-    document.getElementById('bf-delete-btn').style.display = busId ? '' : 'none';
-    setBusForm(meta);
-    if (!meta) bf('depot_id').value = (isState() ? (depotFilter || '') : (me.depotId || ''));
-    stopRows = busId ? [] : [{ name: '', time: '', lat: '', lng: '' }, { name: '', time: '', lat: '', lng: '' }];
-    renderStops();
-    document.getElementById('modal-box').scrollTop = 0;
-    document.getElementById('modal-overlay').classList.add('active');
-    await loadKnownStops();
-    if (busId) {
-      const { data, error } = await sb.from('bus_route_stops').select('stop_name, arrival_time, seq').eq('bus_id', busId).order('seq');
-      if (error) { alert('Could not load the stops: ' + error.message); }
-      stopRows = (data || []).map(r => {
-        const k = knownStops[String(r.stop_name).toLowerCase()];
-        return { name: r.stop_name, time: to24(r.arrival_time), lat: k ? k.latitude : '', lng: k ? k.longitude : '' };
-      });
-      renderStops();
-    }
-  }
-
-  document.getElementById('modal-cancel-btn').addEventListener('click', () => {
-    document.getElementById('modal-overlay').classList.remove('active');
-  });
-
-  async function saveNewStopCoords(stops) {
-    try {
-      const wanted = stops.filter(r => r.lat !== '' && r.lat != null && r.lng !== '' && r.lng != null
-        && isFinite(Number(r.lat)) && isFinite(Number(r.lng)) && !(knownStops && knownStops[r.name.trim().toLowerCase()]));
-      if (!wanted.length) return;
-      const seen = {};
-      const rows = wanted.filter(r => { const k = r.name.trim().toLowerCase(); if (seen[k]) return false; seen[k] = 1; return true; })
-        .map(r => ({ name: r.name.trim(), latitude: Number(r.lat), longitude: Number(r.lng) }));
-      const { error } = await sb.from('bus_stops').insert(rows);
-      if (error) { console.warn('new stops not saved:', error.message); alert('The bus was saved, but the new stop locations were not: ' + error.message); return; }
-      rows.forEach(r => { knownStops[r.name.toLowerCase()] = { name: r.name, latitude: r.latitude, longitude: r.longitude }; });
-    } catch (e) { console.warn(e); }
-  }
-
-  document.getElementById('modal-save-btn').addEventListener('click', async () => {
-    const f = readBusForm();
-    if (f.error) { alert(f.error); return; }
-    const payload = f.payload;
-    if (!payload.depot_id) { alert('Choose the depot this bus belongs to.'); return; }
-    const stops = stopRows.map(r => ({ name: r.name.trim(), time: r.time, lat: r.lat, lng: r.lng })).filter(r => r.name || r.time);
-    if (stops.some(r => !r.name)) { alert('Every stop needs a name. Remove the empty rows.'); return; }
-    if (stops.length === 1) { alert('A route needs at least 2 stops (or leave them all empty).'); return; }
-    const dup = Object.values(busMeta).find(m => m.id !== editingBusId &&
-      String(m.bus_no || '').replace(/\s+/g, '').toUpperCase() === payload.bus_no.replace(/\s+/g, '').toUpperCase());
-    if (dup) { alert('A bus with this number already exists.'); return; }
-    if (!payload.route && stops.length >= 2) payload.route = stops[0].name + ' to ' + stops[stops.length - 1].name;
-
-    const saveBtn = document.getElementById('modal-save-btn');
-    saveBtn.disabled = true; saveBtn.textContent = 'Saving...';
-    let busId = editingBusId, error;
-    if (busId) ({ error } = await sb.from('buses').update(payload).eq('id', busId));
-    else {
-      const r = await sb.from('buses').insert(payload).select('id').single();
-      error = r.error; busId = r.data && r.data.id;
-    }
-    if (error) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; alert('Save failed: ' + error.message); return; }
-
-    if (busId && stops.length) {
-      const del = await sb.from('bus_route_stops').delete().eq('bus_id', busId);
-      if (del.error) alert('The bus was saved, but its stops were not: ' + del.error.message);
-      else {
-        const ins = await sb.from('bus_route_stops').insert(stops.map((r, i) => ({
-          bus_id: busId, seq: i + 1, stop_name: r.name, arrival_time: to12(r.time) })));
-        if (ins.error) alert('The bus was saved, but its stops were not: ' + ins.error.message);
-      }
-      await saveNewStopCoords(stops);
-    }
-    saveBtn.disabled = false; saveBtn.textContent = 'Save';
-    document.getElementById('modal-overlay').classList.remove('active');
-    await loadBusNames();
-    renderFleetTable();
-    renderDriversTable();
-    if (map) renderMapMarkers();
-  });
-
-  document.getElementById('bf-delete-btn').addEventListener('click', async () => {
-    if (!editingBusId) return;
-    const m = busMeta[editingBusId] || {};
-    if (!confirm('Delete bus ' + (m.bus_no || '') + ' and its stops? This cannot be undone.\n\nTo just hide it from riders, untick "In service" instead.')) return;
-    const { error } = await sb.from('buses').delete().eq('id', editingBusId);
-    if (error) { alert('Could not delete: ' + error.message + '\n\nUntick "In service" to hide it instead.'); return; }
-    document.getElementById('modal-overlay').classList.remove('active');
-    await loadBusNames(); await loadLocations();
-    renderFleetTable(); renderDriversTable();
-    if (map) renderMapMarkers();
-  });
-
-  // ---------- DRIVERS PAGE ----------
-
-  function renderDriversTable() {
-    const body = document.getElementById('drivers-table-body');
-    const rows = [];
-    Object.values(busMeta).forEach(m => {
-      const add = (name, role, phone, id) => rows.push(`
-        <tr>
-          <td>${escHtml(name)}</td>
-          <td>${role}</td>
-          <td>${escHtml(phone || '—')}</td>
-          <td>${escHtml(id || '—')}</td>
-          <td>${escHtml(m.bus_no || '—')}</td>
-          <td>${escHtml(m.route || '—')}</td>
-        </tr>`);
-      if (m.driver_name) add(m.driver_name, 'Driver', m.driver_phone, [m.driver_licence_no, m.driver_emp_id].filter(Boolean).join(' / '));
-      if (m.conductor_name) add(m.conductor_name, 'Conductor', m.conductor_phone, m.conductor_emp_id);
-    });
-    body.innerHTML = rows.join('') || `<tr><td colspan="6" class="empty-note">No crew added yet. Add drivers and conductors from the Fleet page.</td></tr>`;
-  }
-
-  // ---------- MAINTENANCE PAGE ----------
-
-  function renderMaintenanceTable() {
-    const body = document.getElementById('maintenance-table-body');
-    const rows = maintenanceRecords.map(m => {
-      const meta = busMeta[m.bus_id] || {};
-      const status = m.resolved_at ? 'resolved' : 'open';
-      const statusLabel = m.resolved_at ? 'Resolved' : 'Open';
-      return `
-        <tr>
-          <td>${escHtml(meta.bus_no || m.bus_id.slice(0,8))}</td>
-          <td>${escHtml(m.notes || m.issue_description || '—')}</td>
-          <td>${m.mechanic_dispatched ? 'Dispatched' : 'Not yet'}</td>
-          <td>${new Date(m.reported_at).toLocaleString()}</td>
-          <td><span class="badge ${status}">${statusLabel}</span></td>
-        </tr>`;
-    }).join('');
-    body.innerHTML = rows || `<tr><td colspan="5" class="empty-note">No maintenance records yet.</td></tr>`;
-  }
-
-  checkExistingSession();
+})();
 </script>
-
 </body>
 </html>
