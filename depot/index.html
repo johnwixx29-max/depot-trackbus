@@ -770,7 +770,7 @@
       <div><label for="bf-ladies_seats">Seats reserved for women</label><input type="number" id="bf-ladies_seats" placeholder="" step="any" /></div>
       <div class="chk"><label><input type="checkbox" id="bf-is_ac" /> Air-conditioned</label></div>
       <div class="chk"><label><input type="checkbox" id="bf-wheelchair_accessible" /> Wheelchair accessible</label></div>
-      <div class="chk"><label><input type="checkbox" id="bf-is_active" /> In service (shown to riders)</label></div>
+      <div class="chk"><label><input type="checkbox" id="bf-is_active" /> In service (shown to passengers)</label></div>
     </div>
 
     <div class="bf-h">Crew</div>
@@ -786,7 +786,7 @@
 
     <div class="bf-h">Emergency and control</div>
     <div class="bf-grid">
-      <div><label for="bf-emergency_phone">Emergency number (shown to riders)</label><input type="tel" id="bf-emergency_phone" placeholder="Helpline / control room" /></div>
+      <div><label for="bf-emergency_phone">Emergency number (shown to passengers)</label><input type="tel" id="bf-emergency_phone" placeholder="Helpline / control room" /></div>
       <div><label for="bf-depot_control_phone">Depot control room number</label><input type="tel" id="bf-depot_control_phone" placeholder="" /></div>
     </div>
 
@@ -2022,7 +2022,7 @@
   document.getElementById('bf-delete-btn').addEventListener('click', async () => {
     if (!editingBusId) return;
     const m = busMeta[editingBusId] || {};
-    if (!confirm('Delete bus ' + (m.bus_no || '') + ' and its stops? This cannot be undone.\n\nTo just hide it from riders, untick "In service" instead.')) return;
+    if (!confirm('Delete bus ' + (m.bus_no || '') + ' and its stops? This cannot be undone.\n\nTo just hide it from passengers, untick "In service" instead.')) return;
     const { error } = await sb.from('buses').delete().eq('id', editingBusId);
     if (error) { alert('Could not delete: ' + error.message + '\n\nUntick "In service" to hide it instead.'); return; }
     document.getElementById('modal-overlay').classList.remove('active');
